@@ -47,17 +47,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   try {
     // 1. Security: Validate API Key
-    // Check both specific and generic names
     const apiKey = env.GEMINI_API_KEY || env.API_KEY;
 
     if (!apiKey) {
-      // Debugging aid: Log available keys (safe: only names, not values)
       const availableKeys = Object.keys(env);
       console.error("Missing API Key. Available env keys:", availableKeys);
       
       return new Response(JSON.stringify({ 
         error: "Server configuration error", 
-        details: "GEMINI_API_KEY not found in environment. Available keys: " + availableKeys.join(", ")
+        details: "GEMINI_API_KEY not found in environment."
       }), {
         status: 500,
         headers: corsHeaders,
@@ -90,19 +88,22 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     // 4. Construct Gemini Request
+    // IMPORTANT: Use gemini-2.5-flash-image for image editing tasks
     const targetModel = model || 'gemini-2.5-flash-image';
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
 
+    // Note: For image editing/captioning with Gemini, providing the Image Part FIRST
+    // followed by the Text Part is often more reliable.
     const payload = {
       contents: [{
         parts: [
-          { text: prompt },
           {
             inline_data: {
               mime_type: "image/jpeg",
               data: imageBase64
             }
-          }
+          },
+          { text: prompt }
         ]
       }]
     };
@@ -118,9 +119,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     if (!apiResponse.ok) {
       console.error("Upstream API Error:", JSON.stringify(data));
+      const errorMessage = (data as any).error?.message || "Unknown upstream error";
+      const errorCode = (data as any).error?.code || apiResponse.status;
+      
       return new Response(JSON.stringify({ 
         error: "Failed to generate content from AI provider", 
-        details: (data as any).error?.message || "Unknown upstream error" 
+        details: `${errorCode}: ${errorMessage}`
       }), {
         status: apiResponse.status,
         headers: corsHeaders,

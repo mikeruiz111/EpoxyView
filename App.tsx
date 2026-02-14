@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Camera } from './components/Camera';
 import { Button } from './components/Button';
+import { ImageCropper } from './components/ImageCropper';
 import { generateFlooringVisualization } from './services/geminiService';
 import { AppState, EPOXY_STYLES, EpoxyStyle } from './types';
 import { 
@@ -22,7 +23,8 @@ import {
   HardHat,
   Home,
   Calculator,
-  DollarSign
+  DollarSign,
+  RefreshCw
 } from 'lucide-react';
 
 interface LeadData {
@@ -73,11 +75,18 @@ const App: React.FC = () => {
 
   const handleCapture = (imageData: string) => {
     setCapturedImage(imageData);
-    setAppState(AppState.PREVIEW);
+    // Go to CROP state instead of PREVIEW directly
+    setAppState(AppState.CROP);
+    
     setProcessedImage(null);
     setFinalQuoteImage(null);
     setSelectedStyle(null);
     setShowForm(false);
+  };
+
+  const handleCropConfirm = (croppedData: string) => {
+    setCapturedImage(croppedData);
+    setAppState(AppState.PREVIEW);
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,6 +108,7 @@ const App: React.FC = () => {
   const handleStyleSelect = (style: EpoxyStyle) => {
     setSelectedStyle(style);
     setCustomPrompt(''); 
+    setErrorMsg(null);
   };
 
   const generatePreview = async () => {
@@ -328,7 +338,7 @@ const App: React.FC = () => {
       <div className="mt-16 text-center opacity-40">
         <Grid3X3 className="mx-auto mb-2 text-slate-500" size={24} strokeWidth={1} />
         <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
-          System Ready • v2.6.0
+          System Ready • v2.6.1
         </p>
       </div>
 
@@ -347,6 +357,17 @@ const App: React.FC = () => {
       onCapture={handleCapture} 
       onCancel={() => setAppState(AppState.IDLE)}
       onUpload={triggerFileUpload} 
+    />
+  );
+  
+  const renderCropper = () => (
+    <ImageCropper 
+        imageSrc={capturedImage!}
+        onConfirm={handleCropConfirm}
+        onCancel={() => {
+            setCapturedImage(null);
+            setAppState(AppState.IDLE);
+        }}
     />
   );
 
@@ -383,7 +404,29 @@ const App: React.FC = () => {
               alt="Original" 
               className="max-w-full max-h-full object-contain"
             />
+            {/* Retake/Edit Button (Overlay) */}
+            <button 
+                onClick={() => setAppState(AppState.CROP)}
+                className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur-sm transition-all"
+            >
+                <RefreshCw size={16} />
+            </button>
           </div>
+        )}
+        
+        {/* Error Overlay */}
+        {errorMsg && (
+            <div className="absolute inset-0 bg-black/80 flex items-center justify-center p-6 z-20 backdrop-blur-sm">
+                <div className="bg-[#0F172A] border border-red-600 p-6 max-w-sm text-center shadow-2xl">
+                    <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-white mb-2">Generation Failed</h3>
+                    <p className="text-slate-300 text-sm mb-6">{errorMsg}</p>
+                    <div className="flex gap-2">
+                        <Button variant="secondary" onClick={() => setErrorMsg(null)} fullWidth>Close</Button>
+                        <Button onClick={generatePreview} fullWidth icon={<RefreshCw size={16} />}>Retry</Button>
+                    </div>
+                </div>
+            </div>
         )}
       </div>
 
@@ -447,13 +490,6 @@ const App: React.FC = () => {
             </details>
           </div>
 
-          {errorMsg && (
-            <div className="p-3 bg-red-900/20 border-l-2 border-red-500 flex items-center gap-2 text-red-200 text-xs font-mono">
-              <AlertCircle size={14} />
-              {errorMsg}
-            </div>
-          )}
-
           <Button 
             onClick={generatePreview}
             disabled={!selectedStyle && customPrompt.trim().length === 0}
@@ -479,6 +515,9 @@ const App: React.FC = () => {
         <h3 className="text-xl font-bold text-white uppercase tracking-widest">Processing</h3>
         <p className="text-orange-500 text-xs uppercase tracking-widest">
           Analysing Geometry <span className="animate-pulse">...</span>
+        </p>
+        <p className="text-slate-500 text-[10px] mt-2">
+           AI generation can take up to 20 seconds.
         </p>
       </div>
     </div>
@@ -754,6 +793,7 @@ const App: React.FC = () => {
       `}</style>
       {appState === AppState.IDLE && renderIdle()}
       {appState === AppState.CAMERA && renderCamera()}
+      {appState === AppState.CROP && renderCropper()}
       {appState === AppState.PREVIEW && renderPreview()}
       {appState === AppState.PROCESSING && renderProcessing()}
       {appState === AppState.RESULT && renderResult()}

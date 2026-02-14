@@ -42,6 +42,8 @@ const resizeImage = (base64Str: string, maxDimension = 1024): Promise<string> =>
   });
 };
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export const generateFlooringVisualization = async (
   base64Image: string,
   prompt: string
@@ -53,52 +55,83 @@ export const generateFlooringVisualization = async (
     // Clean base64 string
     const cleanBase64 = resizedImage.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
 
-    // Call our secure Cloudflare Pages Function
-    const response = await fetch('/api/generate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        imageBase64: cleanBase64,
-        prompt: `Edit this image. Replace the floor with ${prompt}. Ensure the perspective matches the original floor perfectly. Maintain the lighting and shadows of the room. Keep other objects, walls, and furniture unchanged. High photorealism.`,
-        model: MODEL_NAME 
-      })
-    });
+    let attempts = 0;
+    const MAX_RETRIES = 3;
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      // Throw a combined error message including details if available
-      const mainError = (errorData as any).error || `Server error: ${response.status}`;
-      const details = (errorData as any).details ? ` (${(errorData as any).details})` : '';
-      throw new Error(mainError + details);
-    }
+    while (attempts < MAX_RETRIES) {
+      try {
+        // Call our secure Cloudflare Pages Function
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            imageBase64: cleanBase64,
+            prompt: `Edit this image. Replace the floor with ${prompt}. Ensure the perspective matches the original floor perfectly. Maintain the lighting and shadows of the room. Keep other objects, walls, and furniture unchanged. High photorealism.`,
+            model: MODEL_NAME 
+          })
+        });
 
-    const data = await response.json() as any;
-    const candidates = data.candidates;
-
-    if (candidates && candidates.length > 0) {
-      const parts = candidates[0].content.parts;
-      
-      // 1. Check for Image part (inline_data in raw REST API response)
-      for (const part of parts) {
-        if (part.inline_data && part.inline_data.data) {
-          return `data:image/png;base64,${part.inline_data.data}`;
+        // Handle Rate Limiting (429)
+        if (response.status === 429) {
+          console.warn(`Rate limit hit. Attempt ${attempts + 1} of ${MAX_RETRIES}`);
+          const errorData = await response.json().catch(() => ({}));
+          // Try to extract wait time from details if possible, or use exponential backoff
+          const waitTime = 2000 * Math.pow(2, attempts); // 2s, 4s, 8s
+          await delay(waitTime);
+          attempts++;
+          continue;
         }
-      }
 
-      // 2. If no image, check for Text part (refusals/explanations)
-      for (const part of parts) {
-        if (part.text) {
-          throw new Error(part.text);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          // Throw a combined error message including details if available
+          const mainError = (errorData as any).error || `Server error: ${response.status}`;
+          const details = (errorData as any).details ? ` (${(errorData as any).details})` : '';
+          throw new Error(mainError + details);
         }
+
+        const data = await response.json() as any;
+        const candidates = data.candidates;
+
+        if (candidates && candidates.length > 0) {
+          const parts = candidates[0].content.parts;
+          
+          // 1. Check for Image part (inline_data in raw REST API response)
+          for (const part of parts) {
+            if (part.inline_data && part.inline_data.data) {
+              return `data:image/png;base64,${part.inline_data.data}`;
+            }
+          }
+
+          // 2. If no image, check for Text part (refusals/explanations)
+          for (const part of parts) {
+            if (part.text) {
+              throw new Error(part.text);
+            }
+          }
+        }
+
+        throw new Error("The model returned an empty response.");
+
+      } catch (innerError: any) {
+        // If we exhausted retries or it's not a rate limit error, rethrow
+        if (attempts >= MAX_RETRIES - 1 || !innerError.message.includes('429')) {
+          throw innerError;
+        }
+        attempts++;
       }
     }
-
-    throw new Error("The model returned an empty response.");
+    
+    throw new Error("Service busy. Please try again in a moment.");
 
   } catch (error: any) {
     console.error("Gemini Proxy Error:", error);
+    // User friendly message for quota errors
+    if (error.message.includes("quota") || error.message.includes("429")) {
+      throw new Error("High traffic volume. Please wait 1 minute and try again.");
+    }
     throw new Error(error.message || "Failed to process image.");
   }
 };

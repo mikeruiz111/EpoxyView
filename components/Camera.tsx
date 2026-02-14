@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Camera as CameraIcon, RotateCcw, Image as ImageIcon, Scan } from 'lucide-react';
+import { RotateCcw, Image as ImageIcon, Scan, AlertCircle, Camera as CameraIcon } from 'lucide-react';
 import { Button } from './Button';
 
 interface CameraProps {
@@ -11,26 +11,55 @@ interface CameraProps {
 export const Camera: React.FC<CameraProps> = ({ onCapture, onCancel, onUpload }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fallbackInputRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string>('');
+  const [permissionDenied, setPermissionDenied] = useState(false);
 
   const startCamera = useCallback(async () => {
+    setError('');
+    setPermissionDenied(false);
+
+    // Initial constraints: Try for back camera without forcing resolution
+    // This helps avoid OverconstrainedError on some mobile devices
+    const constraints: MediaStreamConstraints = { 
+      video: { 
+        facingMode: 'environment'
+      },
+      audio: false 
+    };
+
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          facingMode: 'environment',
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        },
-        audio: false 
-      });
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       setStream(mediaStream);
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
       }
-    } catch (err) {
-      setError('Unable to access camera. Please ensure you have granted permission.');
-      console.error(err);
+    } catch (err: any) {
+      console.error("Camera access error:", err);
+      
+      // Retry with basic constraints if environment fails
+      if (err.name === 'OverconstrainedError' || err.name === 'ConstraintNotSatisfiedError') {
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          setStream(fallbackStream);
+          if (videoRef.current) {
+            videoRef.current.srcObject = fallbackStream;
+          }
+          return;
+        } catch (retryErr) {
+          console.error("Retry failed:", retryErr);
+        }
+      }
+
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setPermissionDenied(true);
+        setError('Camera permission denied.');
+      } else if (err.name === 'NotFoundError') {
+        setError('No camera device found.');
+      } else {
+        setError('Unable to access camera. It might be in use or not supported.');
+      }
     }
   }, []);
 
@@ -59,18 +88,59 @@ export const Camera: React.FC<CameraProps> = ({ onCapture, onCancel, onUpload })
       if (ctx) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const imageData = canvas.toDataURL('image/jpeg', 0.85);
-        // Play a shutter sound or haptic feedback if possible could go here
         stopCamera();
         onCapture(imageData);
       }
     }
   };
 
+  const handleNativeFallback = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const result = evt.target?.result as string;
+        stopCamera();
+        onCapture(result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-6 text-center bg-[#0B1120]">
-        <p className="text-red-400 mb-4 font-mono">{error}</p>
-        <Button onClick={onCancel}>RETURN TO MENU</Button>
+      <div className="flex flex-col items-center justify-center h-full p-6 text-center bg-[#0B1120] space-y-6">
+        <div className="bg-red-500/10 p-4 rounded-full border border-red-500/50">
+          <AlertCircle className="w-12 h-12 text-red-500" />
+        </div>
+        
+        <div className="space-y-2">
+          <h3 className="text-xl font-bold text-white">Camera Error</h3>
+          <p className="text-slate-400 text-sm max-w-xs mx-auto">{error}</p>
+          {permissionDenied && (
+             <p className="text-orange-500 text-xs uppercase tracking-widest mt-2">
+               Check browser settings
+             </p>
+          )}
+        </div>
+
+        <div className="w-full max-w-xs space-y-3">
+            <Button onClick={() => fallbackInputRef.current?.click()} fullWidth icon={<CameraIcon size={18} />}>
+              USE SYSTEM CAMERA
+            </Button>
+            <Button variant="secondary" onClick={onCancel} fullWidth>
+              CANCEL
+            </Button>
+        </div>
+
+        <input 
+          type="file" 
+          ref={fallbackInputRef}
+          accept="image/*"
+          capture="environment" // Forces native camera on mobile
+          className="hidden"
+          onChange={handleNativeFallback}
+        />
       </div>
     );
   }
