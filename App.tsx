@@ -1,11 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Camera } from './components/Camera';
+import React, { useState, useRef } from 'react';
 import { Button } from './components/Button';
 import { ImageCropper } from './components/ImageCropper';
 import { generateFlooringVisualization } from './services/geminiService';
 import { AppState, EPOXY_STYLES, EpoxyStyle } from './types';
 import { 
-  Camera as CameraIcon, 
   Sparkles, 
   ArrowLeft, 
   Download, 
@@ -43,7 +41,6 @@ type UserMode = 'CUSTOMER' | 'CONTRACTOR';
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [userMode, setUserMode] = useState<UserMode>('CUSTOMER');
-  const [isMobile, setIsMobile] = useState(false);
   
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [processedImage, setProcessedImage] = useState<string | null>(null);
@@ -58,20 +55,6 @@ const App: React.FC = () => {
   const [quoteData, setQuoteData] = useState<QuoteData>({ sqFt: '', pricePerSqFt: '6.50' });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Detect Mobile/Tablet
-  useEffect(() => {
-    const checkMobile = () => {
-      // Check for touch capability or small screen width as proxies for mobile/tablet devices
-      const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-      const isSmallScreen = window.innerWidth < 1024;
-      setIsMobile(isTouch || isSmallScreen);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   const handleCapture = (imageData: string) => {
     setCapturedImage(imageData);
@@ -314,31 +297,23 @@ const App: React.FC = () => {
       </div>
       
       <div className="w-full max-w-xs space-y-4 relative z-10">
-        {/* Only show Camera button if on Mobile/Tablet */}
-        {isMobile && (
-          <Button 
-            onClick={() => setAppState(AppState.CAMERA)} 
-            fullWidth 
-            icon={<CameraIcon size={18} />}
-          >
-            {userMode === 'CUSTOMER' ? 'Take Photo' : 'Take Site Photo'}
-          </Button>
-        )}
-
         <Button 
-          variant={isMobile ? "secondary" : "primary"}
+          variant="primary"
           onClick={triggerFileUpload} 
           fullWidth 
           icon={<Upload size={18} />}
         >
-          {isMobile ? 'Load Image' : 'Upload Garage Photo'}
+          Upload Photo
         </Button>
+        <p className="text-slate-500 text-[10px] font-mono uppercase tracking-widest text-center border-t border-slate-800 pt-2">
+            For best results, use a <span className="text-orange-500">Landscape</span> photo.
+        </p>
       </div>
       
       <div className="mt-16 text-center opacity-40">
         <Grid3X3 className="mx-auto mb-2 text-slate-500" size={24} strokeWidth={1} />
         <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
-          System Ready • v2.6.1
+          System Ready • v2.6.2
         </p>
       </div>
 
@@ -350,14 +325,6 @@ const App: React.FC = () => {
         className="hidden" 
       />
     </div>
-  );
-
-  const renderCamera = () => (
-    <Camera 
-      onCapture={handleCapture} 
-      onCancel={() => setAppState(AppState.IDLE)}
-      onUpload={triggerFileUpload} 
-    />
   );
   
   const renderCropper = () => (
@@ -792,7 +759,6 @@ const App: React.FC = () => {
         }
       `}</style>
       {appState === AppState.IDLE && renderIdle()}
-      {appState === AppState.CAMERA && renderCamera()}
       {appState === AppState.CROP && renderCropper()}
       {appState === AppState.PREVIEW && renderPreview()}
       {appState === AppState.PROCESSING && renderProcessing()}
