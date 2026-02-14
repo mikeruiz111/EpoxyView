@@ -1,9 +1,7 @@
-import { GoogleGenAI } from "@google/genai";
 
-// Initialize the client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// We use the secure backend proxy now, so no direct SDK import is needed.
+// This keeps the client bundle smaller and the API key secure.
 
-// "Nano Banana" alias maps to gemini-2.5-flash-image
 const MODEL_NAME = 'gemini-2.5-flash-image';
 
 const resizeImage = (base64Str: string, maxDimension = 1024): Promise<string> => {
@@ -55,34 +53,34 @@ export const generateFlooringVisualization = async (
     // Clean base64 string
     const cleanBase64 = resizedImage.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
 
-    const contents = {
-      parts: [
-        {
-          inlineData: {
-            mimeType: 'image/jpeg',
-            data: cleanBase64
-          }
-        },
-        {
-          // 'Edit this image' trigger is required for Nano Banana editing mode
-          text: `Edit this image. Replace the floor with ${prompt}. Ensure the perspective matches the original floor perfectly. Maintain the lighting and shadows of the room. Keep other objects, walls, and furniture unchanged. High photorealism.`
-        }
-      ]
-    };
-
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: contents,
+    // Call our secure Cloudflare Pages Function
+    const response = await fetch('/api/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        imageBase64: cleanBase64,
+        prompt: `Edit this image. Replace the floor with ${prompt}. Ensure the perspective matches the original floor perfectly. Maintain the lighting and shadows of the room. Keep other objects, walls, and furniture unchanged. High photorealism.`,
+        model: MODEL_NAME 
+      })
     });
 
-    const candidates = response.candidates;
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error((errorData as any).error || `Server error: ${response.status}`);
+    }
+
+    const data = await response.json() as any;
+    const candidates = data.candidates;
+
     if (candidates && candidates.length > 0) {
       const parts = candidates[0].content.parts;
       
-      // 1. Check for Image part
+      // 1. Check for Image part (inline_data in raw REST API response)
       for (const part of parts) {
-        if (part.inlineData && part.inlineData.data) {
-          return `data:image/png;base64,${part.inlineData.data}`;
+        if (part.inline_data && part.inline_data.data) {
+          return `data:image/png;base64,${part.inline_data.data}`;
         }
       }
 
@@ -97,8 +95,7 @@ export const generateFlooringVisualization = async (
     throw new Error("The model returned an empty response.");
 
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
-    // Propagate the specific message if possible
+    console.error("Gemini Proxy Error:", error);
     throw new Error(error.message || "Failed to process image.");
   }
 };
