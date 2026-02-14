@@ -21,7 +21,8 @@ import {
   Home,
   Calculator,
   DollarSign,
-  RefreshCw
+  RefreshCw,
+  X
 } from 'lucide-react';
 
 interface LeadData {
@@ -454,15 +455,23 @@ const App: React.FC = () => {
         <div className="absolute inset-6 border-b-2 border-orange-300 rounded-full animate-spin [animation-duration:1.5s] [animation-direction:reverse]"></div>
         <Sparkles className="text-orange-500 animate-pulse" size={24} />
       </div>
-      <div className="font-mono space-y-2">
+      <div className="font-mono space-y-2 mb-8">
         <h3 className="text-xl font-bold text-white uppercase tracking-widest">Processing</h3>
         <p className="text-orange-500 text-xs uppercase tracking-widest">
           Analysing Geometry <span className="animate-pulse">...</span>
         </p>
         <p className="text-slate-500 text-[10px] mt-2">
-           AI generation can take up to 20 seconds.
+           AI generation can take up to 30 seconds.
         </p>
       </div>
+      <Button 
+        variant="ghost" 
+        onClick={() => setAppState(AppState.PREVIEW)}
+        icon={<X size={16} />}
+        className="text-xs"
+      >
+        Cancel
+      </Button>
     </div>
   );
 

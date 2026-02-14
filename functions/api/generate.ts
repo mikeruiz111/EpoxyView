@@ -8,6 +8,7 @@ interface RequestBody {
   imageBase64: string;
   prompt: string;
   model?: string;
+  mimeType?: string;
 }
 
 // Define Cloudflare Pages types
@@ -70,7 +71,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400, headers: corsHeaders });
     }
 
-    const { imageBase64, prompt, model } = body;
+    const { imageBase64, prompt, model, mimeType } = body;
 
     if (!imageBase64 || !prompt) {
       return new Response(JSON.stringify({ error: "Missing required fields: imageBase64, prompt" }), {
@@ -99,7 +100,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         parts: [
           {
             inlineData: {
-              mimeType: "image/jpeg",
+              mimeType: mimeType || "image/jpeg",
               data: imageBase64
             }
           },
