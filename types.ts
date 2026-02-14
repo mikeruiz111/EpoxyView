@@ -1,6 +1,5 @@
 export enum AppState {
   IDLE = 'IDLE',
-  CROP = 'CROP',
   PREVIEW = 'PREVIEW',
   PROCESSING = 'PROCESSING',
   RESULT = 'RESULT',

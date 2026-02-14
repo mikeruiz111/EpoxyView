@@ -68,7 +68,13 @@ export const generateFlooringVisualization = async (
           },
           body: JSON.stringify({
             imageBase64: cleanBase64,
-            prompt: `Edit this image. Replace the floor with ${prompt}. Ensure the perspective matches the original floor perfectly. Maintain the lighting and shadows of the room. Keep other objects, walls, and furniture unchanged. High photorealism.`,
+            prompt: `Task: Floor Replacement.
+Edit the input image. Replace the existing garage floor with this texture: "${prompt}".
+Requirements:
+1. Maintain perfect perspective and vanishing points.
+2. Keep all walls, objects, and shadows exactly as they are.
+3. Apply the new flooring texture realistically with correct lighting and reflection.
+4. Output ONLY the edited image.`,
             model: MODEL_NAME 
           })
         });
@@ -98,10 +104,12 @@ export const generateFlooringVisualization = async (
         if (candidates && candidates.length > 0) {
           const parts = candidates[0].content.parts;
           
-          // 1. Check for Image part (inline_data in raw REST API response)
+          // 1. Check for Image part (inlineData in standard REST API response)
           for (const part of parts) {
-            if (part.inline_data && part.inline_data.data) {
-              return `data:image/png;base64,${part.inline_data.data}`;
+            // API may return camelCase 'inlineData' or snake_case 'inline_data'
+            const inlineData = part.inlineData || part.inline_data;
+            if (inlineData && inlineData.data) {
+              return `data:image/png;base64,${inlineData.data}`;
             }
           }
 

@@ -98,8 +98,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       contents: [{
         parts: [
           {
-            inline_data: {
-              mime_type: "image/jpeg",
+            inlineData: {
+              mimeType: "image/jpeg",
               data: imageBase64
             }
           },

@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
 import { Button } from './components/Button';
-import { ImageCropper } from './components/ImageCropper';
 import { generateFlooringVisualization } from './services/geminiService';
 import { AppState, EPOXY_STYLES, EpoxyStyle } from './types';
 import { 
@@ -58,18 +57,13 @@ const App: React.FC = () => {
 
   const handleCapture = (imageData: string) => {
     setCapturedImage(imageData);
-    // Go to CROP state instead of PREVIEW directly
-    setAppState(AppState.CROP);
+    // Go directly to PREVIEW state, skipping crop
+    setAppState(AppState.PREVIEW);
     
     setProcessedImage(null);
     setFinalQuoteImage(null);
     setSelectedStyle(null);
     setShowForm(false);
-  };
-
-  const handleCropConfirm = (croppedData: string) => {
-    setCapturedImage(croppedData);
-    setAppState(AppState.PREVIEW);
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -326,17 +320,6 @@ const App: React.FC = () => {
       />
     </div>
   );
-  
-  const renderCropper = () => (
-    <ImageCropper 
-        imageSrc={capturedImage!}
-        onConfirm={handleCropConfirm}
-        onCancel={() => {
-            setCapturedImage(null);
-            setAppState(AppState.IDLE);
-        }}
-    />
-  );
 
   const renderPreview = () => (
     <div className="flex flex-col h-screen bg-[#0B1120]">
@@ -371,13 +354,6 @@ const App: React.FC = () => {
               alt="Original" 
               className="max-w-full max-h-full object-contain"
             />
-            {/* Retake/Edit Button (Overlay) */}
-            <button 
-                onClick={() => setAppState(AppState.CROP)}
-                className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur-sm transition-all"
-            >
-                <RefreshCw size={16} />
-            </button>
           </div>
         )}
         
@@ -759,7 +735,6 @@ const App: React.FC = () => {
         }
       `}</style>
       {appState === AppState.IDLE && renderIdle()}
-      {appState === AppState.CROP && renderCropper()}
       {appState === AppState.PREVIEW && renderPreview()}
       {appState === AppState.PROCESSING && renderProcessing()}
       {appState === AppState.RESULT && renderResult()}
