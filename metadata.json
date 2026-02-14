@@ -1,0 +1,7 @@
+{
+  "name": "EpoxyVision",
+  "description": "Visualize epoxy flooring in your garage instantly using AI.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
