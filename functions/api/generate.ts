@@ -1,5 +1,7 @@
 interface Env {
-  GEMINI_API_KEY: string;
+  GEMINI_API_KEY?: string;
+  API_KEY?: string;
+  [key: string]: any;
 }
 
 interface RequestBody {
@@ -8,7 +10,7 @@ interface RequestBody {
   model?: string;
 }
 
-// Define missing Cloudflare Pages types
+// Define Cloudflare Pages types
 type PagesFunction<Env = unknown, Params extends string = any, Data extends Record<string, unknown> = Record<string, unknown>> = (
   context: EventContext<Env, Params, Data>
 ) => Response | Promise<Response>;
@@ -37,42 +39,49 @@ export const onRequestOptions: PagesFunction = async () => {
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
-  // Standard CORS headers for the response
+  // Standard CORS headers
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Content-Type": "application/json",
   };
 
   try {
-    // 1. Security: Validate that the API Key exists in the environment
-    if (!env.GEMINI_API_KEY) {
-      console.error("Missing GEMINI_API_KEY environment variable");
-      return new Response(JSON.stringify({ error: "Server configuration error" }), {
+    // 1. Security: Validate API Key
+    // Check both specific and generic names
+    const apiKey = env.GEMINI_API_KEY || env.API_KEY;
+
+    if (!apiKey) {
+      // Debugging aid: Log available keys (safe: only names, not values)
+      const availableKeys = Object.keys(env);
+      console.error("Missing API Key. Available env keys:", availableKeys);
+      
+      return new Response(JSON.stringify({ 
+        error: "Server configuration error", 
+        details: "GEMINI_API_KEY not found in environment. Available keys: " + availableKeys.join(", ")
+      }), {
         status: 500,
         headers: corsHeaders,
       });
     }
 
-    // 2. Parse and Validate Body
+    // 2. Parse Body
     let body: RequestBody;
     try {
       body = await request.json() as RequestBody;
     } catch (e) {
-      return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers: corsHeaders });
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400, headers: corsHeaders });
     }
 
     const { imageBase64, prompt, model } = body;
 
     if (!imageBase64 || !prompt) {
-      return new Response(JSON.stringify({ error: "Missing 'imageBase64' or 'prompt' fields" }), {
+      return new Response(JSON.stringify({ error: "Missing required fields: imageBase64, prompt" }), {
         status: 400,
         headers: corsHeaders,
       });
     }
 
-    // 3. Security: Size Limit Validation (Approx 5MB limit)
-    // Base64 is ~1.33x larger than binary. 5MB binary ~= 6.6MB Base64.
-    // We set a safe upper bound of 7MB for the string length.
+    // 3. Security: Size Limit (Approx 5MB)
     if (imageBase64.length > 7_000_000) {
       return new Response(JSON.stringify({ error: "Image payload too large (max 5MB)" }), {
         status: 413,
@@ -80,10 +89,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // 4. Construct Gemini API Request
-    // We default to gemini-2.5-flash-image as per guidelines (gemini-1.5-pro is prohibited).
+    // 4. Construct Gemini Request
     const targetModel = model || 'gemini-2.5-flash-image';
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${env.GEMINI_API_KEY}`;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
 
     const payload = {
       contents: [{
@@ -109,14 +117,16 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const data = await apiResponse.json();
 
     if (!apiResponse.ok) {
-      console.error("Upstream API Error:", data);
-      return new Response(JSON.stringify({ error: "Failed to generate content", details: data }), {
+      console.error("Upstream API Error:", JSON.stringify(data));
+      return new Response(JSON.stringify({ 
+        error: "Failed to generate content from AI provider", 
+        details: (data as any).error?.message || "Unknown upstream error" 
+      }), {
         status: apiResponse.status,
         headers: corsHeaders,
       });
     }
 
-    // 6. Return Clean Response
     return new Response(JSON.stringify(data), {
       status: 200,
       headers: corsHeaders,
@@ -124,7 +134,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   } catch (err: any) {
     console.error("Internal Function Error:", err);
-    return new Response(JSON.stringify({ error: "Internal Server Error", details: err.message }), {
+    return new Response(JSON.stringify({ 
+      error: "Internal Server Error", 
+      details: err.message 
+    }), {
       status: 500,
       headers: corsHeaders,
     });

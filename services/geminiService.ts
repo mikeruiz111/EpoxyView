@@ -68,7 +68,10 @@ export const generateFlooringVisualization = async (
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error((errorData as any).error || `Server error: ${response.status}`);
+      // Throw a combined error message including details if available
+      const mainError = (errorData as any).error || `Server error: ${response.status}`;
+      const details = (errorData as any).details ? ` (${(errorData as any).details})` : '';
+      throw new Error(mainError + details);
     }
 
     const data = await response.json() as any;
