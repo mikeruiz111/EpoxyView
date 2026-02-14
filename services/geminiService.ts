@@ -3,18 +3,17 @@
 // This keeps the client bundle smaller and the API key secure.
 
 const MODEL_NAME = 'gemini-2.5-flash-image';
-const REQUEST_TIMEOUT_MS = 60000; // 60 seconds timeout
+const REQUEST_TIMEOUT_MS = 90000; // Increased to 90 seconds for slower uploads
 
 const resizeImage = (base64Str: string, maxDimension = 1024): Promise<string> => {
   return new Promise((resolve) => {
-    // Safety timeout for resizing
+    // Increased safety timeout for resizing large camera images
     const timeoutId = setTimeout(() => {
         console.warn("Image resize timed out, using original.");
         resolve(base64Str);
-    }, 3000);
+    }, 5000);
 
     const img = new Image();
-    img.src = base64Str;
     img.onload = () => {
       clearTimeout(timeoutId);
       let width = img.width;
@@ -37,17 +36,20 @@ const resizeImage = (base64Str: string, maxDimension = 1024): Promise<string> =>
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(img, 0, 0, width, height);
-        // Compress to JPEG 0.8 to ensure manageable payload size
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
+        // Compress to JPEG 0.7 for better upload speed while maintaining acceptable quality
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
       } else {
         resolve(base64Str);
       }
     };
     img.onerror = () => {
       clearTimeout(timeoutId);
-      console.warn("Image resize failed, using original.");
+      console.warn("Image load failed, using original.");
       resolve(base64Str);
     };
+    
+    // Assign src AFTER setting handlers
+    img.src = base64Str;
   });
 };
 
@@ -60,21 +62,25 @@ export const generateFlooringVisualization = async (
   try {
     // Determine MIME type (default to jpeg if missing)
     let mimeType = 'image/jpeg';
-    const match = base64Image.match(/^data:(image\/[a-zA-Z+]+);base64,/);
-    if (match) {
-        mimeType = match[1];
+    if (base64Image.startsWith('data:')) {
+        const matches = base64Image.match(/^data:(.+);base64,/);
+        if (matches && matches[1]) {
+            mimeType = matches[1];
+        }
     }
 
     // Resize image before sending to API to avoid "Payload Too Large" or timeouts
     const resizedImage = await resizeImage(base64Image);
     
-    // Update MIME type if we successfully resized to JPEG
+    // Update MIME type if we successfully resized to JPEG (which resizeImage does)
     if (resizedImage.startsWith('data:image/jpeg')) {
         mimeType = 'image/jpeg';
     }
     
-    // Clean base64 string
-    const cleanBase64 = resizedImage.replace(/^data:image\/(png|jpeg|jpg|webp|heic|heif);base64,/, '');
+    // Robust Base64 cleaning: split by comma to remove data URI scheme
+    const cleanBase64 = resizedImage.includes(',') 
+        ? resizedImage.split(',')[1] 
+        : resizedImage;
 
     let attempts = 0;
     const MAX_RETRIES = 3;
@@ -110,7 +116,6 @@ Requirements:
         // Handle Rate Limiting (429)
         if (response.status === 429) {
           console.warn(`Rate limit hit. Attempt ${attempts + 1} of ${MAX_RETRIES}`);
-          const errorData = await response.json().catch(() => ({}));
           const waitTime = 2000 * Math.pow(2, attempts); // 2s, 4s, 8s
           await delay(waitTime);
           attempts++;
@@ -132,7 +137,6 @@ Requirements:
           
           // 1. Check for Image part (inlineData in standard REST API response)
           for (const part of parts) {
-            // API may return camelCase 'inlineData' or snake_case 'inline_data'
             const inlineData = part.inlineData || part.inline_data;
             if (inlineData && inlineData.data) {
               return `data:image/png;base64,${inlineData.data}`;
@@ -153,7 +157,7 @@ Requirements:
         clearTimeout(timeoutId);
         
         if (innerError.name === 'AbortError') {
-            throw new Error("Request timed out. The server took too long to respond.");
+            throw new Error("Request timed out. The upload or processing took too long.");
         }
 
         // If we exhausted retries or it's not a rate limit error, rethrow
@@ -161,6 +165,7 @@ Requirements:
           throw innerError;
         }
         attempts++;
+        await delay(1000); // Wait a bit before retry
       }
     }
     
