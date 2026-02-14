@@ -238,13 +238,12 @@ const App: React.FC = () => {
     setCustomPrompt('');
     setErrorMsg(null);
     setShowForm(false);
-    // Keep userMode as is
   };
 
   // --- Render Helpers ---
 
   const renderIdle = () => (
-    <div className="flex flex-col items-center justify-center min-h-screen px-6 py-12 text-center relative overflow-hidden">
+    <div className="flex flex-col h-full px-6 py-6 text-center relative overflow-hidden">
       
       {/* Blueprint Decorative Elements */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-20">
@@ -255,61 +254,66 @@ const App: React.FC = () => {
          <div className="absolute bottom-10 right-10 w-4 h-4 border-b-2 border-r-2 border-orange-500"></div>
       </div>
 
-      <div className="w-24 h-24 bg-[#0F172A] border-2 border-orange-500/50 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(234,88,12,0.15)] relative">
-        <div className="absolute inset-0 bg-orange-500/5 rotate-45 transform scale-75"></div>
-        <Layers className="text-orange-500 w-12 h-12" strokeWidth={1.5} />
-        {/* Corner markers on logo */}
-        <div className="absolute top-0 left-0 w-1.5 h-1.5 bg-orange-500"></div>
-        <div className="absolute bottom-0 right-0 w-1.5 h-1.5 bg-orange-500"></div>
-      </div>
-      
-      <div className="mb-2 inline-flex items-center gap-2 px-3 py-1 rounded-sm bg-blue-900/30 border border-blue-500/30 text-blue-300 text-[10px] tracking-[0.2em] font-mono uppercase">
-        <Ruler size={10} />
-        Architectural Visualization
-      </div>
+      {/* Top Spacer to push content center */}
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <div className="w-24 h-24 bg-[#0F172A] border-2 border-orange-500/50 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(234,88,12,0.15)] relative">
+            <div className="absolute inset-0 bg-orange-500/5 rotate-45 transform scale-75"></div>
+            <Layers className="text-orange-500 w-12 h-12" strokeWidth={1.5} />
+            <div className="absolute top-0 left-0 w-1.5 h-1.5 bg-orange-500"></div>
+            <div className="absolute bottom-0 right-0 w-1.5 h-1.5 bg-orange-500"></div>
+        </div>
+        
+        <div className="mb-2 inline-flex items-center gap-2 px-3 py-1 rounded-sm bg-blue-900/30 border border-blue-500/30 text-blue-300 text-[10px] tracking-[0.2em] font-mono uppercase">
+            <Ruler size={10} />
+            Architectural Visualization
+        </div>
 
-      <h1 className="text-4xl sm:text-5xl font-bold mb-2 text-white tracking-tight">
-        <span className="text-orange-500">Carefree</span> Stone
-      </h1>
-      <p className="text-slate-400 text-sm tracking-widest uppercase mb-8 max-w-sm border-t border-slate-700 pt-4 mt-2">
-        Project: Epoxy Vision
-      </p>
-
-      {/* Mode Switcher */}
-      <div className="flex bg-[#1e293b] p-1 border border-slate-700 mb-8 relative z-10">
-        <button
-            onClick={() => setUserMode('CUSTOMER')}
-            className={`flex items-center gap-2 px-6 py-2 text-xs font-bold uppercase tracking-wider transition-all ${userMode === 'CUSTOMER' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-        >
-            <Home size={14} /> Homeowner
-        </button>
-        <button
-            onClick={() => setUserMode('CONTRACTOR')}
-            className={`flex items-center gap-2 px-6 py-2 text-xs font-bold uppercase tracking-wider transition-all ${userMode === 'CONTRACTOR' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-        >
-            <HardHat size={14} /> Contractor
-        </button>
-      </div>
-      
-      <div className="w-full max-w-xs space-y-4 relative z-10">
-        <Button 
-          variant="primary"
-          onClick={triggerFileUpload} 
-          fullWidth 
-          icon={<Upload size={18} />}
-        >
-          Upload Photo
-        </Button>
-        <p className="text-slate-500 text-[10px] font-mono uppercase tracking-widest text-center border-t border-slate-800 pt-2">
-            For best results, use a <span className="text-orange-500">Landscape</span> photo.
+        <h1 className="text-4xl sm:text-5xl font-bold mb-2 text-white tracking-tight">
+            <span className="text-orange-500">Carefree</span> Stone
+        </h1>
+        <p className="text-slate-400 text-sm tracking-widest uppercase mb-8 max-w-sm border-t border-slate-700 pt-4 mt-2">
+            Project: Epoxy Vision
         </p>
       </div>
-      
-      <div className="mt-16 text-center opacity-40">
-        <Grid3X3 className="mx-auto mb-2 text-slate-500" size={24} strokeWidth={1} />
-        <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
-          System Ready • v2.6.2
-        </p>
+
+      {/* Bottom Controls */}
+      <div className="flex-none flex flex-col items-center w-full z-10 pb-4">
+        {/* Mode Switcher */}
+        <div className="flex bg-[#1e293b] p-1 border border-slate-700 mb-6">
+            <button
+                onClick={() => setUserMode('CUSTOMER')}
+                className={`flex items-center gap-2 px-6 py-2 text-xs font-bold uppercase tracking-wider transition-all ${userMode === 'CUSTOMER' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+            >
+                <Home size={14} /> Homeowner
+            </button>
+            <button
+                onClick={() => setUserMode('CONTRACTOR')}
+                className={`flex items-center gap-2 px-6 py-2 text-xs font-bold uppercase tracking-wider transition-all ${userMode === 'CONTRACTOR' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+            >
+                <HardHat size={14} /> Contractor
+            </button>
+        </div>
+        
+        <div className="w-full max-w-xs space-y-3">
+            <Button 
+            variant="primary"
+            onClick={triggerFileUpload} 
+            fullWidth 
+            icon={<Upload size={18} />}
+            >
+            Upload Photo
+            </Button>
+            <p className="text-slate-500 text-[10px] font-mono uppercase tracking-widest text-center border-t border-slate-800 pt-2">
+                For best results, use a <span className="text-orange-500">Landscape</span> photo.
+            </p>
+        </div>
+        
+        <div className="mt-6 text-center opacity-40">
+            <Grid3X3 className="mx-auto mb-2 text-slate-500" size={20} strokeWidth={1} />
+            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
+            System Ready • v2.6.2
+            </p>
+        </div>
       </div>
 
       <input 
@@ -323,7 +327,7 @@ const App: React.FC = () => {
   );
 
   const renderPreview = () => (
-    <div className="flex flex-col h-screen bg-[#0B1120]">
+    <div className="flex flex-col h-full bg-[#0B1120]">
       {/* Header */}
       <div className="h-16 flex-none flex items-center bg-[#0F172A] border-b border-slate-700 px-4 justify-between">
         <div className="flex items-center">
@@ -447,7 +451,7 @@ const App: React.FC = () => {
   );
 
   const renderProcessing = () => (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-[#0B1120] p-6 text-center relative overflow-hidden">
+    <div className="flex flex-col items-center justify-center h-full bg-[#0B1120] p-6 text-center relative overflow-hidden">
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:24px_24px] opacity-20 animate-pulse"></div>
       <div className="relative w-32 h-32 mb-8 flex items-center justify-center">
         <div className="absolute inset-0 border-2 border-slate-800 rounded-full"></div>
@@ -477,7 +481,7 @@ const App: React.FC = () => {
 
   const renderFormOverlay = () => {
     return (
-        <div className="flex flex-col h-screen bg-[#0B1120]">
+        <div className="flex flex-col h-full bg-[#0B1120]">
            <div className="h-16 flex-none flex items-center bg-[#0F172A] border-b border-slate-700 px-4">
              <button onClick={() => setShowForm(false)} className="p-2 -ml-2 text-slate-400">
                <ArrowLeft size={24} />
@@ -490,9 +494,14 @@ const App: React.FC = () => {
            <div className="flex-1 flex items-center justify-center p-6 relative overflow-hidden">
              <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:30px_30px] opacity-20 pointer-events-none"></div>
              
-             <div className="w-full max-w-md bg-[#0F172A] border border-orange-500/30 p-8 shadow-2xl relative">
-                <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-orange-500"></div>
-                <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-orange-500"></div>
+             {/* 
+               Added overflow-y-auto max-h-full to the card container.
+               This allows the inner form to scroll if keyboard pops up or screen is small,
+               while the main app container remains fixed.
+             */}
+             <div className="w-full max-w-md max-h-full overflow-y-auto bg-[#0F172A] border border-orange-500/30 p-8 shadow-2xl relative">
+                <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-orange-500 pointer-events-none"></div>
+                <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-orange-500 pointer-events-none"></div>
 
                 <div className="mb-6 text-center">
                   <h3 className="text-xl font-bold text-white uppercase tracking-wider mb-2">
@@ -628,7 +637,7 @@ const App: React.FC = () => {
 
     // Main Result View
     return (
-      <div className="flex flex-col h-screen bg-[#0B1120]">
+      <div className="flex flex-col h-full bg-[#0B1120]">
         <div className="h-16 flex-none flex items-center justify-between bg-[#0F172A] border-b border-slate-700 px-4">
           <button onClick={() => setAppState(AppState.PREVIEW)} className="p-2 -ml-2 text-slate-400 hover:text-orange-500 transition-colors">
             <ArrowLeft size={24} strokeWidth={1.5} />
@@ -735,7 +744,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B1120] text-slate-50 font-sans selection:bg-orange-500/30 selection:text-white bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:24px_24px]">
+    <div className="h-full w-full bg-[#0B1120] text-slate-50 font-sans selection:bg-orange-500/30 selection:text-white bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:24px_24px] overflow-hidden fixed inset-0">
       <style>{`
         @keyframes loading {
           0% { transform: translateX(-100%); }
