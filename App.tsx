@@ -388,38 +388,38 @@ const App: React.FC = () => {
       </div>
 
       {/* Controls */}
-      <div className="flex-none bg-[#0F172A] p-6 border-t border-orange-500/20 shadow-2xl z-10">
-        <div className="flex flex-col gap-5">
+      <div className="flex-none bg-[#0F172A] p-4 border-t border-orange-500/20 shadow-2xl z-10">
+        <div className="flex flex-col gap-4">
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2">
                <label className="text-[10px] font-bold text-orange-500 uppercase tracking-widest font-mono">
                  Select Texture
                </label>
                <span className="text-[10px] text-slate-500 font-mono">LIB-V1</span>
             </div>
             
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-2">
               {EPOXY_STYLES.map((style) => (
                 <button
                   key={style.id}
                   onClick={() => handleStyleSelect(style)}
                   className={`
-                    relative group flex flex-col items-center gap-2 p-1.5 border transition-all duration-200
+                    relative group flex flex-col items-center gap-1 p-1 border rounded-lg transition-all duration-200
                     ${selectedStyle?.id === style.id 
                       ? 'bg-slate-800 border-orange-500 ring-1 ring-orange-500' 
                       : 'bg-[#1e293b] border-slate-700 hover:border-slate-500'}
                   `}
                 >
                   <div 
-                    className="w-full aspect-square shadow-inner border border-black/20" 
+                    className="w-full aspect-square shadow-inner border border-black/20 rounded-md" 
                     style={{ background: style.cssBackground }}
                   />
                   {selectedStyle?.id === style.id && (
-                    <div className="absolute top-0 right-0 p-0.5 bg-orange-500 text-black">
-                      <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                    <div className="absolute top-0 right-0 p-0.5 bg-orange-500 text-black rounded-tr-lg rounded-bl-lg shadow-sm">
+                      <div className="w-1 h-1 bg-white rounded-full" />
                     </div>
                   )}
-                  <span className={`text-[9px] font-mono uppercase tracking-tighter ${selectedStyle?.id === style.id ? 'text-orange-400' : 'text-slate-400'}`}>
+                  <span className={`text-[7px] sm:text-[9px] font-mono uppercase tracking-tighter truncate w-full text-center ${selectedStyle?.id === style.id ? 'text-orange-400' : 'text-slate-400'}`}>
                     {style.name}
                   </span>
                 </button>
