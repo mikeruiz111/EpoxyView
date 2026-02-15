@@ -92,6 +92,13 @@ const App: React.FC = () => {
   const generatePreview = async () => {
     if (!capturedImage) return;
 
+    const internalApiKey = import.meta.env.VITE_INTERNAL_API_KEY as string;
+    if (!internalApiKey) {
+        setErrorMsg("Client API Key not configured. Please contact support.");
+        setAppState(AppState.PREVIEW);
+        return;
+    }
+
     let finalPrompt = "";
     if (customPrompt.trim().length > 0) {
       finalPrompt = customPrompt;
@@ -105,7 +112,7 @@ const App: React.FC = () => {
     try {
       setAppState(AppState.PROCESSING);
       setErrorMsg(null);
-      const resultImage = await generateFlooringVisualization(capturedImage, finalPrompt);
+      const resultImage = await generateFlooringVisualization(capturedImage, finalPrompt, internalApiKey);
       setProcessedImage(resultImage);
       setAppState(AppState.RESULT);
     } catch (err: any) {

@@ -57,7 +57,8 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const generateFlooringVisualization = async (
   base64Image: string,
-  prompt: string
+  prompt: string,
+  apiKey: string // Added to pass the key for authentication
 ): Promise<string> => {
   try {
     // Determine MIME type (default to jpeg if missing)
@@ -95,17 +96,12 @@ export const generateFlooringVisualization = async (
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'X-API-Key': apiKey, // Add the API key header
           },
           signal: controller.signal,
           body: JSON.stringify({
             imageBase64: cleanBase64,
-            prompt: `Task: Floor Replacement.
-Edit the input image. Replace the existing garage floor with this texture: "${prompt}".
-Requirements:
-1. Maintain perfect perspective and vanishing points.
-2. Keep all walls, objects, and shadows exactly as they are.
-3. Apply the new flooring texture realistically with correct lighting and reflection.
-4. Output ONLY the edited image.`,
+            prompt: `Task: Floor Replacement.\nEdit the input image. Replace the existing garage floor with this texture: "${prompt}".\nRequirements:\n1. Maintain perfect perspective and vanishing points.\n2. Keep all walls, objects, and shadows exactly as they are.\n3. Apply the new flooring texture realistically with correct lighting and reflection.\n4. Output ONLY the edited image.`,
             model: MODEL_NAME,
             mimeType: mimeType
           })

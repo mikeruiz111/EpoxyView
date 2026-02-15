@@ -1,6 +1,7 @@
 interface Env {
   GEMINI_API_KEY?: string;
   API_KEY?: string;
+  INTERNAL_API_KEY?: string; // Added for our own API authentication
   [key: string]: any;
 }
 
@@ -27,43 +28,73 @@ interface EventContext<Env, Params extends string, Data> {
   data: Data;
 }
 
-export const onRequestOptions: PagesFunction = async () => {
-  return new Response(null, {
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    },
-  });
+// 1. Define the allowed origins for CORS
+const allowedOrigins = [
+  'http://localhost:5173', // Vite default dev port
+  'http://localhost:3000', // Common dev port
+  'https://yourapp.com',    // Your production frontend
+];
+
+// 2. Helper function to generate appropriate CORS headers
+const getCorsHeaders = (requestOrigin: string | null) => {
+  const headers: { [key: string]: string } = {
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-API-Key', // Allow custom header
+  };
+  if (requestOrigin && allowedOrigins.includes(requestOrigin)) {
+    headers['Access-Control-Allow-Origin'] = requestOrigin;
+  } else {
+    headers['Access-Control-Allow-Origin'] = allowedOrigins[0];
+  }
+  return headers;
+};
+
+
+export const onRequestOptions: PagesFunction = async (context) => {
+    const requestOrigin = context.request.headers.get('Origin');
+    return new Response(null, {
+        headers: getCorsHeaders(requestOrigin),
+    });
 };
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
+  const requestOrigin = request.headers.get('Origin');
 
-  // Standard CORS headers
+  if (!requestOrigin || !allowedOrigins.includes(requestOrigin)) {
+    return new Response(JSON.stringify({ error: 'Forbidden: Invalid origin' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  
   const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Content-Type": "application/json",
+    ...getCorsHeaders(requestOrigin),
+    'Content-Type': 'application/json',
   };
 
   try {
-    // 1. Security: Validate API Key
-    const apiKey = env.GEMINI_API_KEY || env.API_KEY;
+    // New: Authenticate our own API endpoint
+    const internalApiKey = env.INTERNAL_API_KEY;
+    const clientApiKey = request.headers.get('X-API-Key');
 
-    if (!apiKey) {
-      const availableKeys = Object.keys(env);
-      console.error("Missing API Key. Available env keys:", availableKeys);
-      
-      return new Response(JSON.stringify({ 
-        error: "Server configuration error", 
-        details: "GEMINI_API_KEY not found in environment."
-      }), {
+    if (!internalApiKey || clientApiKey !== internalApiKey) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+            status: 401,
+            headers: corsHeaders,
+        });
+    }
+
+    const geminiApiKey = env.GEMINI_API_KEY || env.API_KEY;
+
+    if (!geminiApiKey) {
+      console.error("Missing GEMINI_API_KEY.");
+      return new Response(JSON.stringify({ error: "Server configuration error" }), {
         status: 500,
         headers: corsHeaders,
       });
     }
 
-    // 2. Parse Body
     let body: RequestBody;
     try {
       body = await request.json() as RequestBody;
@@ -80,7 +111,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // 3. Security: Size Limit (Approx 5MB)
     if (imageBase64.length > 7_000_000) {
       return new Response(JSON.stringify({ error: "Image payload too large (max 5MB)" }), {
         status: 413,
@@ -88,28 +118,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // 4. Construct Gemini Request
-    // IMPORTANT: Use gemini-2.5-flash-image for image editing tasks
     const targetModel = model || 'gemini-2.5-flash-image';
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${geminiApiKey}`;
 
-    // Note: For image editing/captioning with Gemini, providing the Image Part FIRST
-    // followed by the Text Part is often more reliable.
     const payload = {
       contents: [{
         parts: [
-          {
-            inlineData: {
-              mimeType: mimeType || "image/jpeg",
-              data: imageBase64
-            }
-          },
+          { inlineData: { mimeType: mimeType || "image/jpeg", data: imageBase64 } },
           { text: prompt }
         ]
       }]
     };
 
-    // 5. Call Google Gemini API
     const apiResponse = await fetch(apiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -123,10 +143,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       const errorMessage = (data as any).error?.message || "Unknown upstream error";
       const errorCode = (data as any).error?.code || apiResponse.status;
       
-      return new Response(JSON.stringify({ 
-        error: "Failed to generate content from AI provider", 
-        details: `${errorCode}: ${errorMessage}`
-      }), {
+      return new Response(JSON.stringify({ error: `Failed to generate content: ${errorCode} ${errorMessage}` }), {
         status: apiResponse.status,
         headers: corsHeaders,
       });
@@ -139,10 +156,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   } catch (err: any) {
     console.error("Internal Function Error:", err);
-    return new Response(JSON.stringify({ 
-      error: "Internal Server Error", 
-      details: err.message 
-    }), {
+    return new Response(JSON.stringify({ error: "Internal Server Error", details: err.message }), {
       status: 500,
       headers: corsHeaders,
     });
