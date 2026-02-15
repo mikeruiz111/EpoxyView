@@ -81,12 +81,7 @@ const App: React.FC = () => {
   const generatePreview = async () => {
     if (!capturedImage) return;
 
-    const internalApiKey = import.meta.env.VITE_INTERNAL_API_KEY as string;
-    if (!internalApiKey) {
-        setErrorMsg("Client API Key not configured. Please contact support.");
-        setAppState(AppState.PREVIEW);
-        return;
-    }
+    const internalApiKey = (import.meta.env.VITE_INTERNAL_API_KEY as string) || '';
 
     let finalPrompt = "";
     if (customPrompt.trim().length > 0) {

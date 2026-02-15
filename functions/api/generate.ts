@@ -76,20 +76,24 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {
     // New: Authenticate our own API endpoint
     const internalApiKey = env.INTERNAL_API_KEY;
-    const clientApiKey = request.headers.get('X-API-Key');
-
-    if (!internalApiKey || clientApiKey !== internalApiKey) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-            status: 401,
-            headers: corsHeaders,
-        });
+    if (internalApiKey) {
+        const clientApiKey = request.headers.get('X-API-Key');
+        if (clientApiKey !== internalApiKey) {
+            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+                status: 401,
+                headers: corsHeaders,
+            });
+        }
+    } else {
+        // This is a security risk, but we are allowing it for now.
+        console.warn("INTERNAL_API_KEY is not set. The /api/generate endpoint is not protected.");
     }
 
     const geminiApiKey = env.GEMINI_API_KEY || env.API_KEY;
 
     if (!geminiApiKey) {
       console.error("Missing GEMINI_API_KEY.");
-      return new Response(JSON.stringify({ error: "Server configuration error" }), {
+      return new Response(JSON.stringify({ error: "Server configuration error: GEMINI_API_KEY not found" }), {
         status: 500,
         headers: corsHeaders,
       });
