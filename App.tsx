@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Button } from './components/Button';
 import { generateFlooringVisualization } from './services/geminiService';
-import { AppState, EPOXY_STYLES, EpoxyStyle } from './types';
+import { AppState, EPOXY_STYLES, EpoxyStyle, LeadData, QuoteData, FormErrors } from './types';
 import { 
   Sparkles, 
   ArrowLeft, 
@@ -25,17 +25,6 @@ import {
   X
 } from 'lucide-react';
 
-interface LeadData {
-  name: string;
-  phone: string;
-  email: string;
-}
-
-interface QuoteData {
-  sqFt: string;
-  pricePerSqFt: string;
-}
-
 type UserMode = 'CUSTOMER' | 'CONTRACTOR';
 
 const App: React.FC = () => {
@@ -53,18 +42,18 @@ const App: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [leadData, setLeadData] = useState<LeadData>({ name: '', phone: '', email: '' });
   const [quoteData, setQuoteData] = useState<QuoteData>({ sqFt: '', pricePerSqFt: '6.50' });
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleCapture = (imageData: string) => {
     setCapturedImage(imageData);
-    // Go directly to PREVIEW state, skipping crop
     setAppState(AppState.PREVIEW);
-    
     setProcessedImage(null);
     setFinalQuoteImage(null);
     setSelectedStyle(null);
     setShowForm(false);
+    setFormErrors({});
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,7 +111,6 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Image Composition Logic ---
   const generateBlueprintOverlay = async () => {
     if (!processedImage) return;
 
@@ -134,29 +122,23 @@ const App: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Canvas setup: Image height + Footer height
     const footerHeight = 220; 
     canvas.width = img.width;
     canvas.height = img.height + footerHeight;
 
-    // 1. Draw Original Image
     ctx.drawImage(img, 0, 0);
 
-    // 2. Draw Blueprint Footer Background (Navy)
     ctx.fillStyle = '#0F172A';
     ctx.fillRect(0, img.height, canvas.width, footerHeight);
 
-    // 3. Draw Top Border for Footer (Orange)
     ctx.fillStyle = '#ea580c';
     ctx.fillRect(0, img.height, canvas.width, 4);
 
-    // 4. Draw Content based on Mode
     const startY = img.height + 50;
     const marginLeft = 40;
     
-    // Header Label
     ctx.font = 'bold 24px monospace';
-    ctx.fillStyle = '#ea580c'; // Orange Label
+    ctx.fillStyle = '#ea580c';
     
     if (userMode === 'CONTRACTOR') {
         ctx.fillText('OFFICIAL ESTIMATE:', marginLeft, startY);
@@ -165,13 +147,11 @@ const App: React.FC = () => {
     }
 
     ctx.font = '20px monospace';
-    ctx.fillStyle = '#94a3b8'; // Slate Text
+    ctx.fillStyle = '#94a3b8';
     
-    // Column 1: Variable Info
     let currentY = startY + 40;
 
     if (userMode === 'CONTRACTOR') {
-        // Contractor Data
         const sqFt = parseFloat(quoteData.sqFt) || 0;
         const rate = parseFloat(quoteData.pricePerSqFt) || 0;
         const total = sqFt * rate;
@@ -180,12 +160,10 @@ const App: React.FC = () => {
         ctx.fillText(`AREA:     ${quoteData.sqFt} SQ FT`, marginLeft, currentY + 30);
         ctx.fillText(`RATE:     $${quoteData.pricePerSqFt}/SF`, marginLeft, currentY + 60);
         
-        // Total Highlight
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 28px monospace';
         ctx.fillText(`TOTAL:    $${total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, marginLeft, currentY + 100);
     } else {
-        // Customer Data
         ctx.fillText(`CLIENT: ${leadData.name.toUpperCase()}`, marginLeft, currentY);
         ctx.fillText(`PHONE:  ${leadData.phone}`, marginLeft, currentY + 30);
         ctx.fillText(`EMAIL:  ${leadData.email}`, marginLeft, currentY + 60);
@@ -195,7 +173,6 @@ const App: React.FC = () => {
         ctx.fillText('>> QUOTE REQUEST PENDING', marginLeft, currentY + 100);
     }
 
-    // Column 2: Brand Info (Right Aligned)
     const rightX = canvas.width - 40;
     ctx.textAlign = 'right';
     
@@ -218,23 +195,57 @@ const App: React.FC = () => {
     setShowForm(false);
   };
 
+  const validateForm = (): FormErrors => {
+      const errors: FormErrors = {};
+      if (userMode === 'CUSTOMER') {
+          if (leadData.name.trim().length < 2) {
+              errors.name = "Name must be at least 2 characters.";
+          }
+          const phoneRegex = /^\(?(\d{3})\)?[-. ]?(\d{3})[-. ]?(\d{4})$/;
+          if (!phoneRegex.test(leadData.phone)) {
+              errors.phone = "Please enter a valid 10-digit phone number.";
+          }
+          const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/g;
+          if (leadData.email && !emailRegex.test(leadData.email)) {
+              errors.email = "Please enter a valid email address.";
+          }
+      } else {
+          const sqFtNum = parseFloat(quoteData.sqFt);
+          if (isNaN(sqFtNum) || sqFtNum <= 0) {
+              errors.sqFt = "Must be a positive number.";
+          }
+          const priceNum = parseFloat(quoteData.pricePerSqFt);
+          if (isNaN(priceNum) || priceNum < 0) {
+              errors.pricePerSqFt = "Must be a non-negative number.";
+          }
+      }
+      return errors;
+  }
+
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (userMode === 'CUSTOMER') {
-        if (leadData.name && leadData.phone) {
-            generateBlueprintOverlay();
-        } else {
-            alert("Please enter your name and phone number.");
-        }
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+        setFormErrors(validationErrors);
     } else {
-        // Contractor Mode
-        if (quoteData.sqFt) {
-            generateBlueprintOverlay();
-        } else {
-            alert("Please enter the square footage.");
-        }
+        setFormErrors({});
+        generateBlueprintOverlay();
     }
   };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const { name, value } = e.target as { name: keyof (LeadData & QuoteData), value: string };
+      
+      if (formErrors[name]) {
+          setFormErrors(prev => ({ ...prev, [name]: undefined }));
+      }
+
+      if (name in leadData) {
+          setLeadData(prev => ({...prev, [name]: value }))
+      } else if (name in quoteData) {
+          setQuoteData(prev => ({...prev, [name]: value }))
+      }
+  }
 
   const reset = () => {
     setAppState(AppState.IDLE);
@@ -245,14 +256,11 @@ const App: React.FC = () => {
     setCustomPrompt('');
     setErrorMsg(null);
     setShowForm(false);
+    setFormErrors({});
   };
-
-  // --- Render Helpers ---
 
   const renderIdle = () => (
     <div className="flex flex-col h-full px-6 py-6 text-center relative overflow-hidden">
-      
-      {/* Blueprint Decorative Elements */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-20">
          <div className="w-full h-full border-[20px] border-slate-800/50"></div>
          <div className="absolute top-10 left-10 w-4 h-4 border-t-2 border-l-2 border-orange-500"></div>
@@ -260,8 +268,6 @@ const App: React.FC = () => {
          <div className="absolute bottom-10 left-10 w-4 h-4 border-b-2 border-l-2 border-orange-500"></div>
          <div className="absolute bottom-10 right-10 w-4 h-4 border-b-2 border-r-2 border-orange-500"></div>
       </div>
-
-      {/* Top Spacer to push content center */}
       <div className="flex-1 flex flex-col items-center justify-center">
         <div className="w-24 h-24 bg-[#0F172A] border-2 border-orange-500/50 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(234,88,12,0.15)] relative">
             <div className="absolute inset-0 bg-orange-500/5 rotate-45 transform scale-75"></div>
@@ -269,12 +275,10 @@ const App: React.FC = () => {
             <div className="absolute top-0 left-0 w-1.5 h-1.5 bg-orange-500"></div>
             <div className="absolute bottom-0 right-0 w-1.5 h-1.5 bg-orange-500"></div>
         </div>
-        
         <div className="mb-2 inline-flex items-center gap-2 px-3 py-1 rounded-sm bg-blue-900/30 border border-blue-500/30 text-blue-300 text-[10px] tracking-[0.2em] font-mono uppercase">
             <Ruler size={10} />
             Architectural Visualization
         </div>
-
         <h1 className="text-4xl sm:text-5xl font-bold mb-2 text-white tracking-tight">
             <span className="text-orange-500">Carefree</span> Stone
         </h1>
@@ -282,10 +286,7 @@ const App: React.FC = () => {
             Project: Epoxy Vision
         </p>
       </div>
-
-      {/* Bottom Controls */}
       <div className="flex-none flex flex-col items-center w-full z-10 pb-4">
-        {/* Mode Switcher */}
         <div className="flex bg-[#1e293b] p-1 border border-slate-700 mb-6">
             <button
                 onClick={() => setUserMode('CUSTOMER')}
@@ -300,7 +301,6 @@ const App: React.FC = () => {
                 <HardHat size={14} /> Contractor
             </button>
         </div>
-        
         <div className="w-full max-w-xs space-y-3">
             <Button 
             variant="primary"
@@ -314,7 +314,6 @@ const App: React.FC = () => {
                 For best results, use a <span className="text-orange-500">Landscape</span> photo.
             </p>
         </div>
-        
         <div className="mt-6 text-center opacity-40">
             <Grid3X3 className="mx-auto mb-2 text-slate-500" size={20} strokeWidth={1} />
             <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
@@ -322,7 +321,6 @@ const App: React.FC = () => {
             </p>
         </div>
       </div>
-
       <input 
         type="file" 
         ref={fileInputRef} 
@@ -335,7 +333,6 @@ const App: React.FC = () => {
 
   const renderPreview = () => (
     <div className="flex flex-col h-full bg-[#0B1120]">
-      {/* Header */}
       <div className="h-16 flex-none flex items-center bg-[#0F172A] border-b border-slate-700 px-4 justify-between">
         <div className="flex items-center">
           <button onClick={reset} className="p-2 -ml-2 text-slate-400 hover:text-orange-500 transition-colors">
@@ -355,8 +352,6 @@ const App: React.FC = () => {
              </div>
         </div>
       </div>
-
-      {/* Image Preview */}
       <div className="flex-1 min-h-0 relative bg-[#050912] overflow-hidden flex items-center justify-center border-b border-slate-800">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:40px_40px] opacity-20 pointer-events-none"></div>
         {capturedImage && (
@@ -368,8 +363,6 @@ const App: React.FC = () => {
             />
           </div>
         )}
-        
-        {/* Error Overlay */}
         {errorMsg && (
             <div className="absolute inset-0 bg-black/80 flex items-center justify-center p-6 z-20 backdrop-blur-sm">
                 <div className="bg-[#0F172A] border border-red-600 p-6 max-w-sm text-center shadow-2xl">
@@ -384,8 +377,6 @@ const App: React.FC = () => {
             </div>
         )}
       </div>
-
-      {/* Controls */}
       <div className="flex-none bg-[#0F172A] p-4 border-t border-orange-500/20 shadow-2xl z-10">
         <div className="flex flex-col gap-4">
           <div>
@@ -395,7 +386,6 @@ const App: React.FC = () => {
                </label>
                <span className="text-[10px] text-slate-500 font-mono">LIB-V1</span>
             </div>
-            
             <div className="grid grid-cols-4 gap-2">
               {EPOXY_STYLES.map((style) => (
                 <button
@@ -424,7 +414,6 @@ const App: React.FC = () => {
               ))}
             </div>
           </div>
-
           <div className="pt-2 border-t border-slate-800">
             <details className="group">
               <summary className="list-none cursor-pointer flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 hover:text-orange-400 transition-colors font-mono">
@@ -444,7 +433,6 @@ const App: React.FC = () => {
               />
             </details>
           </div>
-
           <Button 
             onClick={generatePreview}
             disabled={!selectedStyle && customPrompt.trim().length === 0}
@@ -500,16 +488,9 @@ const App: React.FC = () => {
            
            <div className="flex-1 flex items-center justify-center p-6 relative overflow-hidden">
              <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:30px_30px] opacity-20 pointer-events-none"></div>
-             
-             {/* 
-               Added overflow-y-auto max-h-full to the card container.
-               This allows the inner form to scroll if keyboard pops up or screen is small,
-               while the main app container remains fixed.
-             */}
              <div className="w-full max-w-md max-h-full overflow-y-auto bg-[#0F172A] border border-orange-500/30 p-8 shadow-2xl relative">
                 <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-orange-500 pointer-events-none"></div>
                 <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-orange-500 pointer-events-none"></div>
-
                 <div className="mb-6 text-center">
                   <h3 className="text-xl font-bold text-white uppercase tracking-wider mb-2">
                       {userMode === 'CONTRACTOR' ? 'Estimate Details' : 'Request Quote'}
@@ -520,10 +501,8 @@ const App: React.FC = () => {
                         : 'Enter details to personalize your design card.'}
                   </p>
                 </div>
-
-                <form onSubmit={handleFormSubmit} className="space-y-4">
+                <form onSubmit={handleFormSubmit} className="space-y-4" noValidate>
                    {userMode === 'CONTRACTOR' ? (
-                       // CONTRACTOR FORM
                        <>
                            <div className="space-y-1">
                                 <label className="text-[10px] font-mono text-orange-500 uppercase">Client Name (Optional)</label>
@@ -531,8 +510,9 @@ const App: React.FC = () => {
                                     <User className="absolute left-3 top-3.5 text-slate-500 w-4 h-4" />
                                     <input 
                                         type="text" 
+                                        name="name"
                                         value={leadData.name}
-                                        onChange={(e) => setLeadData({...leadData, name: e.target.value})}
+                                        onChange={handleInputChange}
                                         className="w-full bg-[#050912] border border-slate-700 text-white pl-10 pr-4 py-3 text-sm focus:border-orange-500 focus:outline-none"
                                         placeholder="Client Name / Address"
                                     />
@@ -544,33 +524,33 @@ const App: React.FC = () => {
                                     <div className="relative">
                                         <Calculator className="absolute left-3 top-3.5 text-slate-500 w-4 h-4" />
                                         <input 
-                                            required
                                             type="number" 
+                                            name="sqFt"
                                             value={quoteData.sqFt}
-                                            onChange={(e) => setQuoteData({...quoteData, sqFt: e.target.value})}
-                                            className="w-full bg-[#050912] border border-slate-700 text-white pl-10 pr-4 py-3 text-sm focus:border-orange-500 focus:outline-none"
+                                            onChange={handleInputChange}
+                                            className={`w-full bg-[#050912] border ${formErrors.sqFt ? 'border-red-500' : 'border-slate-700'} text-white pl-10 pr-4 py-3 text-sm focus:border-orange-500 focus:outline-none`}
                                             placeholder="400"
                                         />
                                     </div>
+                                     {formErrors.sqFt && <p className="text-red-500 text-xs mt-1 font-mono">{formErrors.sqFt}</p>}
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-mono text-orange-500 uppercase">Price / Sq Ft</label>
                                     <div className="relative">
                                         <DollarSign className="absolute left-3 top-3.5 text-slate-500 w-4 h-4" />
                                         <input 
-                                            required
                                             type="number"
+                                            name="pricePerSqFt"
                                             step="0.01"
                                             value={quoteData.pricePerSqFt}
-                                            onChange={(e) => setQuoteData({...quoteData, pricePerSqFt: e.target.value})}
-                                            className="w-full bg-[#050912] border border-slate-700 text-white pl-10 pr-4 py-3 text-sm focus:border-orange-500 focus:outline-none"
+                                            onChange={handleInputChange}
+                                            className={`w-full bg-[#050912] border ${formErrors.pricePerSqFt ? 'border-red-500' : 'border-slate-700'} text-white pl-10 pr-4 py-3 text-sm focus:border-orange-500 focus:outline-none`}
                                             placeholder="6.50"
                                         />
                                     </div>
+                                    {formErrors.pricePerSqFt && <p className="text-red-500 text-xs mt-1 font-mono">{formErrors.pricePerSqFt}</p>}
                                 </div>
                            </div>
-                           
-                           {/* Live Total Calculation */}
                            <div className="p-4 bg-slate-800/50 border border-slate-700 text-center">
                                 <span className="text-[10px] text-slate-500 uppercase tracking-widest block mb-1">Estimated Total</span>
                                 <span className="text-2xl font-bold text-white">
@@ -579,54 +559,54 @@ const App: React.FC = () => {
                            </div>
                        </>
                    ) : (
-                       // CUSTOMER FORM
                        <>
                         <div className="space-y-1">
                             <label className="text-[10px] font-mono text-orange-500 uppercase">Your Name</label>
                             <div className="relative">
-                            <User className="absolute left-3 top-3.5 text-slate-500 w-4 h-4" />
-                            <input 
-                                required
-                                type="text" 
-                                value={leadData.name}
-                                onChange={(e) => setLeadData({...leadData, name: e.target.value})}
-                                className="w-full bg-[#050912] border border-slate-700 text-white pl-10 pr-4 py-3 text-sm focus:border-orange-500 focus:outline-none"
-                                placeholder="John Doe"
-                            />
+                                <User className="absolute left-3 top-3.5 text-slate-500 w-4 h-4" />
+                                <input 
+                                    type="text" 
+                                    name="name"
+                                    value={leadData.name}
+                                    onChange={handleInputChange}
+                                    className={`w-full bg-[#050912] border ${formErrors.name ? 'border-red-500' : 'border-slate-700'} text-white pl-10 pr-4 py-3 text-sm focus:border-orange-500 focus:outline-none`}
+                                    placeholder="John Doe"
+                                />
                             </div>
+                            {formErrors.name && <p className="text-red-500 text-xs mt-1 font-mono">{formErrors.name}</p>}
                         </div>
-
                         <div className="space-y-1">
                             <label className="text-[10px] font-mono text-orange-500 uppercase">Phone Contact</label>
                             <div className="relative">
-                            <Phone className="absolute left-3 top-3.5 text-slate-500 w-4 h-4" />
-                            <input 
-                                required
-                                type="tel" 
-                                value={leadData.phone}
-                                onChange={(e) => setLeadData({...leadData, phone: e.target.value})}
-                                className="w-full bg-[#050912] border border-slate-700 text-white pl-10 pr-4 py-3 text-sm focus:border-orange-500 focus:outline-none"
-                                placeholder="(555) 123-4567"
-                            />
+                                <Phone className="absolute left-3 top-3.5 text-slate-500 w-4 h-4" />
+                                <input 
+                                    type="tel" 
+                                    name="phone"
+                                    value={leadData.phone}
+                                    onChange={handleInputChange}
+                                    className={`w-full bg-[#050912] border ${formErrors.phone ? 'border-red-500' : 'border-slate-700'} text-white pl-10 pr-4 py-3 text-sm focus:border-orange-500 focus:outline-none`}
+                                    placeholder="(555) 123-4567"
+                                />
                             </div>
+                            {formErrors.phone && <p className="text-red-500 text-xs mt-1 font-mono">{formErrors.phone}</p>}
                         </div>
-
                         <div className="space-y-1">
                             <label className="text-[10px] font-mono text-orange-500 uppercase">Email Address (Optional)</label>
                             <div className="relative">
-                            <Mail className="absolute left-3 top-3.5 text-slate-500 w-4 h-4" />
-                            <input 
-                                type="email" 
-                                value={leadData.email}
-                                onChange={(e) => setLeadData({...leadData, email: e.target.value})}
-                                className="w-full bg-[#050912] border border-slate-700 text-white pl-10 pr-4 py-3 text-sm focus:border-orange-500 focus:outline-none"
-                                placeholder="john@example.com"
-                            />
+                                <Mail className="absolute left-3 top-3.5 text-slate-500 w-4 h-4" />
+                                <input 
+                                    type="email" 
+                                    name="email"
+                                    value={leadData.email}
+                                    onChange={handleInputChange}
+                                    className={`w-full bg-[#050912] border ${formErrors.email ? 'border-red-500' : 'border-slate-700'} text-white pl-10 pr-4 py-3 text-sm focus:border-orange-500 focus:outline-none`}
+                                    placeholder="john@example.com"
+                                />
                             </div>
+                            {formErrors.email && <p className="text-red-500 text-xs mt-1 font-mono">{formErrors.email}</p>}
                         </div>
                        </>
                    )}
-
                    <Button type="submit" fullWidth icon={<FileCheck size={18} />}>
                      {userMode === 'CONTRACTOR' ? 'Generate Official Quote' : 'Create Project Card'}
                    </Button>
@@ -642,7 +622,6 @@ const App: React.FC = () => {
       return renderFormOverlay();
     }
 
-    // Main Result View
     return (
       <div className="flex flex-col h-full bg-[#0B1120]">
         <div className="h-16 flex-none flex items-center justify-between bg-[#0F172A] border-b border-slate-700 px-4">
@@ -658,7 +637,6 @@ const App: React.FC = () => {
 
         <div className="flex-1 min-h-0 relative bg-[#050912] flex items-center justify-center overflow-hidden p-4">
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:40px_40px] opacity-10 pointer-events-none"></div>
-
           {processedImage ? (
              <div className="relative max-w-full max-h-full border border-slate-700 bg-[#0B1120] shadow-2xl flex flex-col justify-center">
                <img 
@@ -677,7 +655,6 @@ const App: React.FC = () => {
           )}
         </div>
 
-        {/* Actions Footer */}
         <div className="flex-none p-6 bg-[#0F172A] border-t border-slate-700">
           {!finalQuoteImage ? (
             <div className="space-y-3">
@@ -712,12 +689,10 @@ const App: React.FC = () => {
 
                 <Button 
                   onClick={() => {
-                     // SMS Link
                      if (userMode === 'CUSTOMER') {
                          const body = `Hi Carefree Stone, I'm ${leadData.name}. I'd like a quote for this epoxy floor design. (My Ref: ${Date.now().toString().slice(-6)})`;
                          window.location.href = `sms:16028670867?body=${encodeURIComponent(body)}`;
                      } else {
-                        // Contractor share
                          if (navigator.share) {
                              fetch(finalQuoteImage).then(res => res.blob()).then(blob => {
                                  const file = new File([blob], "estimate.jpg", { type: "image/jpeg" });

@@ -6,6 +6,23 @@ export enum AppState {
   ERROR = 'ERROR'
 }
 
+// FORMS DATA
+export interface LeadData {
+  name: string;
+  phone: string;
+  email: string;
+}
+
+export interface QuoteData {
+  sqFt: string;
+  pricePerSqFt: string;
+}
+
+// A type for our validation errors object
+export type FormErrors = Partial<Record<keyof (LeadData & QuoteData), string>>;
+
+
+// STYLES
 export interface EpoxyStyle {
   id: string;
   name: string;
