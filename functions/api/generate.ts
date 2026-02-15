@@ -32,7 +32,7 @@ interface EventContext<Env, Params extends string, Data> {
 const allowedOrigins = [
   'http://localhost:5173', // Vite default dev port
   'http://localhost:3000', // Common dev port
-  'https://yourapp.com',    // Your production frontend
+  'https://epoxycam.com',    // Your production frontend
 ];
 
 // 2. Helper function to generate appropriate CORS headers

@@ -10,7 +10,7 @@ export default defineConfig({
   server: {
     proxy: {
       // Proxies /api requests to Cloudflare Functions during local development
-      '/api': 'http://127.0.0.1:8788'
+      '/api': 'https://epoxycam.com'
     }
   }
 });
