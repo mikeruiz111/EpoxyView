@@ -76,7 +76,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   try {
     // New: Authenticate our own API endpoint
-    /*
     const internalApiKey = env.INTERNAL_API_KEY;
     if (internalApiKey) {
         const clientApiKey = request.headers.get('X-API-Key');
@@ -90,7 +89,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         // This is a security risk, but we are allowing it for now.
         console.warn("INTERNAL_API_KEY is not set. The /api/generate endpoint is not protected.");
     }
-    */
 
     const geminiApiKey = env.GEMINI_API_KEY || env.API_KEY;
 
