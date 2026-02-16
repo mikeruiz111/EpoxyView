@@ -2,7 +2,6 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  base: "/EpoxyView/",
   plugins: [react()],
   build: {
     outDir: 'dist',
@@ -15,4 +14,3 @@ export default defineConfig({
     }
   }
 });
-// Minor change to trigger deployment
