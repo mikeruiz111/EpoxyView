@@ -58,9 +58,21 @@ export const onRequestOptions: PagesFunction = async (context) => {
     });
 };
 
+const rateLimiter = new Map();
+
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   const requestOrigin = request.headers.get('Origin');
+  
+  const clientIP = request.headers.get('CF-Connecting-IP');
+  if(clientIP){
+    const lastRequest = rateLimiter.get(clientIP);
+    if (lastRequest && Date.now() - lastRequest < 5000) {
+      return new Response('Rate limited', { status: 429 });
+    }
+    rateLimiter.set(clientIP, Date.now());
+  }
+
 
   if (!requestOrigin || !allowedOrigins.includes(requestOrigin)) {
     return new Response(JSON.stringify({ error: 'Forbidden: Invalid origin' }), {

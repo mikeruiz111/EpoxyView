@@ -1,7 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useReducer, useRef } from 'react';
 import { Button } from './components/Button';
+import { Camera } from './components/Camera';
 import { generateFlooringVisualization } from './services/geminiService';
-import { AppState, EPOXY_STYLES, EpoxyStyle, LeadData, QuoteData, FormErrors } from './types';
+import { AppState, EpoxyStyle, LeadData, QuoteData, FormErrors, UserMode } from './types';
+import { EPOXY_STYLES } from './epoxy-styles';
 import { 
   Sparkles, 
   ArrowLeft, 
@@ -22,39 +24,107 @@ import {
   Calculator,
   DollarSign,
   RefreshCw,
-  X
+  X,
+  Camera as CameraIcon
 } from 'lucide-react';
 
-type UserMode = 'CUSTOMER' | 'CONTRACTOR';
+// Reducer logic
+interface AppStateObject {
+    appState: AppState;
+    userMode: UserMode;
+    capturedImage: string | null;
+    processedImage: string | null;
+    finalQuoteImage: string | null;
+    selectedStyle: EpoxyStyle | null;
+    customPrompt: string;
+    errorMsg: string | null;
+    showForm: boolean;
+    leadData: LeadData;
+    quoteData: QuoteData;
+    formErrors: FormErrors;
+}
+
+type Action = 
+    | { type: 'SET_APP_STATE', payload: AppState } 
+    | { type: 'SET_USER_MODE', payload: UserMode }
+    | { type: 'CAPTURE_IMAGE', payload: string }
+    | { type: 'SET_PROCESSED_IMAGE', payload: string | null }
+    | { type: 'SET_FINAL_QUOTE_IMAGE', payload: string | null }
+    | { type: 'SET_STYLE', payload: EpoxyStyle | null }
+    | { type: 'SET_CUSTOM_PROMPT', payload: string }
+    | { type: 'SET_ERROR', payload: string | null }
+    | { type: 'TOGGLE_FORM', payload: boolean }
+    | { type: 'SET_LEAD_DATA', payload: Partial<LeadData> }
+    | { type: 'SET_QUOTE_DATA', payload: Partial<QuoteData> }
+    | { type: 'SET_FORM_ERRORS', payload: FormErrors }
+    | { type: 'RESET' };
+
+const initialState: AppStateObject = {
+    appState: AppState.IDLE,
+    userMode: 'CUSTOMER',
+    capturedImage: null,
+    processedImage: null,
+    finalQuoteImage: null,
+    selectedStyle: null,
+    customPrompt: '',
+    errorMsg: null,
+    showForm: false,
+    leadData: { name: '', phone: '', email: '' },
+    quoteData: { sqFt: '', pricePerSqFt: '6.50' },
+    formErrors: {},
+};
+
+function appReducer(state: AppStateObject, action: Action): AppStateObject {
+    switch (action.type) {
+        case 'SET_APP_STATE':
+            return { ...state, appState: action.payload };
+        case 'SET_USER_MODE':
+            return { ...state, userMode: action.payload };
+        case 'CAPTURE_IMAGE':
+            return {
+                ...state,
+                appState: AppState.PREVIEW,
+                capturedImage: action.payload,
+                processedImage: null,
+                finalQuoteImage: null,
+                selectedStyle: null,
+                showForm: false,
+                formErrors: {},
+            };
+        case 'SET_PROCESSED_IMAGE':
+            return { ...state, processedImage: action.payload, appState: AppState.RESULT };
+        case 'SET_FINAL_QUOTE_IMAGE':
+            return { ...state, finalQuoteImage: action.payload, showForm: false };
+        case 'SET_STYLE':
+            return { ...state, selectedStyle: action.payload, customPrompt: '', errorMsg: null };
+        case 'SET_CUSTOM_PROMPT':
+            return { ...state, customPrompt: action.payload, selectedStyle: action.payload.length > 0 ? null : state.selectedStyle };
+        case 'SET_ERROR':
+            return { ...state, errorMsg: action.payload, appState: AppState.PREVIEW };
+        case 'TOGGLE_FORM':
+            return { ...state, showForm: action.payload };
+        case 'SET_LEAD_DATA':
+            return { ...state, leadData: { ...state.leadData, ...action.payload } };
+        case 'SET_QUOTE_DATA':
+            return { ...state, quoteData: { ...state.quoteData, ...action.payload } };
+        case 'SET_FORM_ERRORS':
+            return { ...state, formErrors: action.payload };
+        case 'RESET':
+            return initialState;
+        default:
+            return state;
+    }
+}
+
 
 const App: React.FC = () => {
-  const [appState, setAppState] = useState<AppState>(AppState.IDLE);
-  const [userMode, setUserMode] = useState<UserMode>('CUSTOMER');
-  
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [processedImage, setProcessedImage] = useState<string | null>(null);
-  const [finalQuoteImage, setFinalQuoteImage] = useState<string | null>(null);
-  const [selectedStyle, setSelectedStyle] = useState<EpoxyStyle | null>(null);
-  const [customPrompt, setCustomPrompt] = useState<string>('');
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  
-  // Forms State
-  const [showForm, setShowForm] = useState(false);
-  const [leadData, setLeadData] = useState<LeadData>({ name: '', phone: '', email: '' });
-  const [quoteData, setQuoteData] = useState<QuoteData>({ sqFt: '', pricePerSqFt: '6.50' });
-  const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [state, dispatch] = useReducer(appReducer, initialState);
+  const { 
+      appState, userMode, capturedImage, processedImage, finalQuoteImage, 
+      selectedStyle, customPrompt, errorMsg, showForm, leadData, quoteData, formErrors
+  } = state;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleCapture = (imageData: string) => {
-    setCapturedImage(imageData);
-    setAppState(AppState.PREVIEW);
-    setProcessedImage(null);
-    setFinalQuoteImage(null);
-    setSelectedStyle(null);
-    setShowForm(false);
-    setFormErrors({});
-  };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -62,7 +132,7 @@ const App: React.FC = () => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
-        handleCapture(result);
+        dispatch({ type: 'CAPTURE_IMAGE', payload: result });
       };
       reader.readAsDataURL(file);
     }
@@ -72,16 +142,15 @@ const App: React.FC = () => {
     fileInputRef.current?.click();
   };
 
-  const handleStyleSelect = (style: EpoxyStyle) => {
-    setSelectedStyle(style);
-    setCustomPrompt(''); 
-    setErrorMsg(null);
-  };
-
   const generatePreview = async () => {
     if (!capturedImage) return;
 
-    const internalApiKey = (import.meta.env.VITE_INTERNAL_API_KEY as string) || '';
+    const internalApiKey = import.meta.env.VITE_INTERNAL_API_KEY;
+    if (!internalApiKey) {
+      dispatch({ type: 'SET_ERROR', payload: "App configuration error. Please refresh." });
+      console.error("VITE_INTERNAL_API_KEY not set");
+      return;
+    }
 
     let finalPrompt = "";
     if (customPrompt.trim().length > 0) {
@@ -89,105 +158,113 @@ const App: React.FC = () => {
     } else if (selectedStyle) {
       finalPrompt = selectedStyle.promptDescription;
     } else {
-      setErrorMsg("Please select a palette or enter a custom description.");
+      dispatch({ type: 'SET_ERROR', payload: "Please select a palette or enter a custom description." });
       return;
     }
 
     try {
-      setAppState(AppState.PROCESSING);
-      setErrorMsg(null);
+      dispatch({ type: 'SET_APP_STATE', payload: AppState.PROCESSING });
+      dispatch({ type: 'SET_ERROR', payload: null });
       const resultImage = await generateFlooringVisualization(capturedImage, finalPrompt, internalApiKey);
-      setProcessedImage(resultImage);
-      setAppState(AppState.RESULT);
+      dispatch({ type: 'SET_PROCESSED_IMAGE', payload: resultImage });
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || "Failed to generate image. Please try again or use a different angle.");
-      setAppState(AppState.PREVIEW);
+      dispatch({ type: 'SET_ERROR', payload: err.message || "Failed to generate image. Please try again or use a different angle." });
     }
   };
 
   const generateBlueprintOverlay = async () => {
     if (!processedImage) return;
 
-    const img = new Image();
-    img.src = processedImage;
-    await new Promise((resolve) => { img.onload = resolve; });
+    try {
+      const img = new Image();
+      img.src = processedImage;
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Image load timeout')), 5000);
+        img.onload = () => { clearTimeout(timeout); resolve(null); };
+        img.onerror = () => { clearTimeout(timeout); reject(new Error('Image load failed')); };
+      });
 
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Could not get canvas context');
+      }
 
-    const footerHeight = 220; 
-    canvas.width = img.width;
-    canvas.height = img.height + footerHeight;
+      const footerHeight = 220; 
+      canvas.width = img.width;
+      canvas.height = img.height + footerHeight;
 
-    ctx.drawImage(img, 0, 0);
+      ctx.drawImage(img, 0, 0);
 
-    ctx.fillStyle = '#0F172A';
-    ctx.fillRect(0, img.height, canvas.width, footerHeight);
+      ctx.fillStyle = '#0F172A';
+      ctx.fillRect(0, img.height, canvas.width, footerHeight);
 
-    ctx.fillStyle = '#ea580c';
-    ctx.fillRect(0, img.height, canvas.width, 4);
+      ctx.fillStyle = '#ea580c';
+      ctx.fillRect(0, img.height, canvas.width, 4);
 
-    const startY = img.height + 50;
-    const marginLeft = 40;
-    
-    ctx.font = 'bold 24px monospace';
-    ctx.fillStyle = '#ea580c';
-    
-    if (userMode === 'CONTRACTOR') {
-        ctx.fillText('OFFICIAL ESTIMATE:', marginLeft, startY);
-    } else {
-        ctx.fillText('PROJECT SPECIFICATION:', marginLeft, startY);
+      const startY = img.height + 50;
+      const marginLeft = 40;
+      
+      ctx.font = 'bold 24px monospace';
+      ctx.fillStyle = '#ea580c';
+      
+      if (userMode === 'CONTRACTOR') {
+          ctx.fillText('OFFICIAL ESTIMATE:', marginLeft, startY);
+      } else {
+          ctx.fillText('PROJECT SPECIFICATION:', marginLeft, startY);
+      }
+
+      ctx.font = '20px monospace';
+      ctx.fillStyle = '#94a3b8';
+      
+      let currentY = startY + 40;
+
+      if (userMode === 'CONTRACTOR') {
+          const sqFt = parseFloat(quoteData.sqFt) || 0;
+          const rate = parseFloat(quoteData.pricePerSqFt) || 0;
+          const total = sqFt * rate;
+
+          ctx.fillText(`CLIENT:   ${leadData.name.toUpperCase() || 'VALUED CUSTOMER'}`, marginLeft, currentY);
+          ctx.fillText(`AREA:     ${quoteData.sqFt} SQ FT`, marginLeft, currentY + 30);
+          ctx.fillText(`RATE:     $${quoteData.pricePerSqFt}/SF`, marginLeft, currentY + 60);
+          
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 28px monospace';
+          ctx.fillText(`TOTAL:    $${total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, marginLeft, currentY + 100);
+      } else {
+          ctx.fillText(`CLIENT: ${leadData.name.toUpperCase()}`, marginLeft, currentY);
+          ctx.fillText(`PHONE:  ${leadData.phone}`, marginLeft, currentY + 30);
+          ctx.fillText(`EMAIL:  ${leadData.email}`, marginLeft, currentY + 60);
+          
+          ctx.fillStyle = '#ea580c';
+          ctx.font = 'italic 16px monospace';
+          ctx.fillText('>> QUOTE REQUEST PENDING', marginLeft, currentY + 100);
+      }
+
+      const rightX = canvas.width - 40;
+      ctx.textAlign = 'right';
+      
+      ctx.fillStyle = '#ea580c';
+      ctx.font = 'bold 32px sans-serif';
+      ctx.fillText('CAREFREE STONE', rightX, startY + 10);
+      
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '16px monospace';
+      ctx.fillText('CONCRETE COATINGS', rightX, startY + 35);
+      ctx.fillText('(602) 867-0867', rightX, startY + 60);
+      
+      ctx.fillStyle = '#475569';
+      ctx.font = '14px monospace';
+      const dateStr = new Date().toLocaleDateString();
+      ctx.fillText(`DATE: ${dateStr}`, rightX, startY + 120);
+      ctx.fillText(`REF: ${Date.now().toString().slice(-6)}`, rightX, startY + 140);
+
+      dispatch({ type: 'SET_FINAL_QUOTE_IMAGE', payload: canvas.toDataURL('image/jpeg', 0.9) });
+    } catch (err) {
+      console.error("Failed to generate blueprint overlay:", err);
+      dispatch({ type: 'SET_ERROR', payload: "Failed to load the generated image for final processing. Please try again." });
     }
-
-    ctx.font = '20px monospace';
-    ctx.fillStyle = '#94a3b8';
-    
-    let currentY = startY + 40;
-
-    if (userMode === 'CONTRACTOR') {
-        const sqFt = parseFloat(quoteData.sqFt) || 0;
-        const rate = parseFloat(quoteData.pricePerSqFt) || 0;
-        const total = sqFt * rate;
-
-        ctx.fillText(`CLIENT:   ${leadData.name.toUpperCase() || 'VALUED CUSTOMER'}`, marginLeft, currentY);
-        ctx.fillText(`AREA:     ${quoteData.sqFt} SQ FT`, marginLeft, currentY + 30);
-        ctx.fillText(`RATE:     $${quoteData.pricePerSqFt}/SF`, marginLeft, currentY + 60);
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 28px monospace';
-        ctx.fillText(`TOTAL:    $${total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, marginLeft, currentY + 100);
-    } else {
-        ctx.fillText(`CLIENT: ${leadData.name.toUpperCase()}`, marginLeft, currentY);
-        ctx.fillText(`PHONE:  ${leadData.phone}`, marginLeft, currentY + 30);
-        ctx.fillText(`EMAIL:  ${leadData.email}`, marginLeft, currentY + 60);
-        
-        ctx.fillStyle = '#ea580c';
-        ctx.font = 'italic 16px monospace';
-        ctx.fillText('>> QUOTE REQUEST PENDING', marginLeft, currentY + 100);
-    }
-
-    const rightX = canvas.width - 40;
-    ctx.textAlign = 'right';
-    
-    ctx.fillStyle = '#ea580c';
-    ctx.font = 'bold 32px sans-serif';
-    ctx.fillText('CAREFREE STONE', rightX, startY + 10);
-    
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '16px monospace';
-    ctx.fillText('CONCRETE COATINGS', rightX, startY + 35);
-    ctx.fillText('(602) 867-0867', rightX, startY + 60);
-    
-    ctx.fillStyle = '#475569';
-    ctx.font = '14px monospace';
-    const dateStr = new Date().toLocaleDateString();
-    ctx.fillText(`DATE: ${dateStr}`, rightX, startY + 120);
-    ctx.fillText(`REF: ${Date.now().toString().slice(-6)}`, rightX, startY + 140);
-
-    setFinalQuoteImage(canvas.toDataURL('image/jpeg', 0.9));
-    setShowForm(false);
   };
 
   const validateForm = (): FormErrors => {
@@ -221,9 +298,9 @@ const App: React.FC = () => {
     e.preventDefault();
     const validationErrors = validateForm();
     if (Object.keys(validationErrors).length > 0) {
-        setFormErrors(validationErrors);
+        dispatch({ type: 'SET_FORM_ERRORS', payload: validationErrors });
     } else {
-        setFormErrors({});
+        dispatch({ type: 'SET_FORM_ERRORS', payload: {} });
         generateBlueprintOverlay();
     }
   };
@@ -232,27 +309,15 @@ const App: React.FC = () => {
       const { name, value } = e.target as { name: keyof (LeadData & QuoteData), value: string };
       
       if (formErrors[name]) {
-          setFormErrors(prev => ({ ...prev, [name]: undefined }));
+          dispatch({ type: 'SET_FORM_ERRORS', payload: { ...formErrors, [name]: undefined } });
       }
 
       if (name in leadData) {
-          setLeadData(prev => ({...prev, [name]: value }))
+          dispatch({ type: 'SET_LEAD_DATA', payload: { [name]: value } });
       } else if (name in quoteData) {
-          setQuoteData(prev => ({...prev, [name]: value }))
+          dispatch({ type: 'SET_QUOTE_DATA', payload: { [name]: value } });
       }
   }
-
-  const reset = () => {
-    setAppState(AppState.IDLE);
-    setCapturedImage(null);
-    setProcessedImage(null);
-    setFinalQuoteImage(null);
-    setSelectedStyle(null);
-    setCustomPrompt('');
-    setErrorMsg(null);
-    setShowForm(false);
-    setFormErrors({});
-  };
 
   const renderIdle = () => (
     <div className="flex flex-col h-full px-6 py-6 text-center relative overflow-hidden">
@@ -284,13 +349,13 @@ const App: React.FC = () => {
       <div className="flex-none flex flex-col items-center w-full z-10 pb-4">
         <div className="flex bg-[#1e293b] p-1 border border-slate-700 mb-6">
             <button
-                onClick={() => setUserMode('CUSTOMER')}
+                onClick={() => dispatch({ type: 'SET_USER_MODE', payload: 'CUSTOMER' })}
                 className={`flex items-center gap-2 px-6 py-2 text-xs font-bold uppercase tracking-wider transition-all ${userMode === 'CUSTOMER' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
             >
                 <Home size={14} /> Homeowner
             </button>
             <button
-                onClick={() => setUserMode('CONTRACTOR')}
+                onClick={() => dispatch({ type: 'SET_USER_MODE', payload: 'CONTRACTOR' })}
                 className={`flex items-center gap-2 px-6 py-2 text-xs font-bold uppercase tracking-wider transition-all ${userMode === 'CONTRACTOR' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
             >
                 <HardHat size={14} /> Contractor
@@ -298,12 +363,20 @@ const App: React.FC = () => {
         </div>
         <div className="w-full max-w-xs space-y-3">
             <Button 
-            variant="primary"
-            onClick={triggerFileUpload} 
-            fullWidth 
-            icon={<Upload size={18} />}
+                variant="primary"
+                onClick={() => dispatch({ type: 'SET_APP_STATE', payload: AppState.CAPTURE })}
+                fullWidth 
+                icon={<CameraIcon size={18} />}
             >
-            Upload Photo
+                Take Photo
+            </Button>
+            <Button 
+                variant="secondary"
+                onClick={triggerFileUpload} 
+                fullWidth 
+                icon={<Upload size={18} />}
+            >
+                Upload Photo
             </Button>
             <p className="text-slate-500 text-[10px] font-mono uppercase tracking-widest text-center border-t border-slate-800 pt-2">
                 For best results, use a <span className="text-orange-500">Landscape</span> photo.
@@ -326,11 +399,19 @@ const App: React.FC = () => {
     </div>
   );
 
+  const renderCapture = () => (
+    <Camera 
+        onCapture={(image) => dispatch({ type: 'CAPTURE_IMAGE', payload: image })}
+        onCancel={() => dispatch({ type: 'SET_APP_STATE', payload: AppState.IDLE })}
+        onUpload={triggerFileUpload}
+    />
+  );
+
   const renderPreview = () => (
     <div className="flex flex-col h-full bg-[#0B1120]">
       <div className="h-16 flex-none flex items-center bg-[#0F172A] border-b border-slate-700 px-4 justify-between">
         <div className="flex items-center">
-          <button onClick={reset} className="p-2 -ml-2 text-slate-400 hover:text-orange-500 transition-colors">
+          <button onClick={() => dispatch({ type: 'RESET' })} className="p-2 -ml-2 text-slate-400 hover:text-orange-500 transition-colors">
             <ArrowLeft size={24} strokeWidth={1.5} />
           </button>
           <div className="ml-2">
@@ -365,7 +446,7 @@ const App: React.FC = () => {
                     <h3 className="text-lg font-bold text-white mb-2">Generation Failed</h3>
                     <p className="text-slate-300 text-sm mb-6">{errorMsg}</p>
                     <div className="flex gap-2">
-                        <Button variant="secondary" onClick={() => setErrorMsg(null)} fullWidth>Close</Button>
+                        <Button variant="secondary" onClick={() => dispatch({ type: 'SET_ERROR', payload: null })} fullWidth>Close</Button>
                         <Button onClick={generatePreview} fullWidth icon={<RefreshCw size={16} />}>Retry</Button>
                     </div>
                 </div>
@@ -385,7 +466,7 @@ const App: React.FC = () => {
               {EPOXY_STYLES.map((style) => (
                 <button
                   key={style.id}
-                  onClick={() => handleStyleSelect(style)}
+                  onClick={() => dispatch({ type: 'SET_STYLE', payload: style })}
                   className={`
                     relative group flex flex-col items-center gap-1 p-1 border rounded-lg transition-all duration-200
                     ${selectedStyle?.id === style.id 
@@ -395,7 +476,7 @@ const App: React.FC = () => {
                 >
                   <div 
                     className="w-full aspect-square shadow-inner border border-black/20 rounded-md" 
-                    style={{ background: style.cssBackground }}
+                    style={{ background: style.css }}
                   />
                   {selectedStyle?.id === style.id && (
                     <div className="absolute top-0 right-0 p-0.5 bg-orange-500 text-black rounded-tr-lg rounded-bl-lg shadow-sm">
@@ -419,10 +500,7 @@ const App: React.FC = () => {
               <input 
                 type="text" 
                 value={customPrompt}
-                onChange={(e) => {
-                  setCustomPrompt(e.target.value);
-                  if (e.target.value.length > 0) setSelectedStyle(null);
-                }}
+                onChange={(e) => dispatch({ type: 'SET_CUSTOM_PROMPT', payload: e.target.value })}
                 placeholder='SPECIFY CUSTOM TEXTURE...'
                 className="w-full bg-[#050912] border border-slate-700 text-orange-100 rounded-none px-4 py-3 text-xs font-mono focus:outline-none focus:border-orange-500 placeholder-slate-600 uppercase"
               />
@@ -460,7 +538,7 @@ const App: React.FC = () => {
       </div>
       <Button 
         variant="ghost" 
-        onClick={() => setAppState(AppState.PREVIEW)}
+        onClick={() => dispatch({ type: 'SET_APP_STATE', payload: AppState.PREVIEW })}
         icon={<X size={16} />}
         className="text-xs"
       >
@@ -473,7 +551,7 @@ const App: React.FC = () => {
     return (
         <div className="flex flex-col h-full bg-[#0B1120]">
            <div className="h-16 flex-none flex items-center bg-[#0F172A] border-b border-slate-700 px-4">
-             <button onClick={() => setShowForm(false)} className="p-2 -ml-2 text-slate-400">
+             <button onClick={() => dispatch({ type: 'TOGGLE_FORM', payload: false })} className="p-2 -ml-2 text-slate-400">
                <ArrowLeft size={24} />
              </button>
              <h2 className="ml-2 font-mono text-orange-500 text-xs uppercase tracking-widest">
@@ -620,7 +698,7 @@ const App: React.FC = () => {
     return (
       <div className="flex flex-col h-full bg-[#0B1120]">
         <div className="h-16 flex-none flex items-center justify-between bg-[#0F172A] border-b border-slate-700 px-4">
-          <button onClick={() => setAppState(AppState.PREVIEW)} className="p-2 -ml-2 text-slate-400 hover:text-orange-500 transition-colors">
+          <button onClick={() => dispatch({ type: 'SET_APP_STATE', payload: AppState.PREVIEW })} className="p-2 -ml-2 text-slate-400 hover:text-orange-500 transition-colors">
             <ArrowLeft size={24} strokeWidth={1.5} />
           </button>
           <div className="text-center">
@@ -654,7 +732,7 @@ const App: React.FC = () => {
           {!finalQuoteImage ? (
             <div className="space-y-3">
               <Button 
-                onClick={() => setShowForm(true)} 
+                onClick={() => dispatch({ type: 'TOGGLE_FORM', payload: true })}
                 fullWidth 
                 icon={userMode === 'CONTRACTOR' ? <Calculator size={18} /> : <FileCheck size={18} />}
                 className="animate-pulse shadow-[0_0_15px_rgba(234,88,12,0.3)]"
@@ -662,8 +740,8 @@ const App: React.FC = () => {
                 {userMode === 'CONTRACTOR' ? 'Calculate & Finalize Estimate' : 'Request Quote'}
               </Button>
               <div className="grid grid-cols-2 gap-3">
-                 <Button variant="secondary" onClick={() => setAppState(AppState.PREVIEW)}>Try Again</Button>
-                 <Button variant="secondary" onClick={reset}>New Photo</Button>
+                 <Button variant="secondary" onClick={() => dispatch({ type: 'SET_APP_STATE', payload: AppState.PREVIEW })}>Try Again</Button>
+                 <Button variant="secondary" onClick={() => dispatch({ type: 'RESET' })}>New Photo</Button>
               </div>
             </div>
           ) : (
@@ -673,7 +751,7 @@ const App: React.FC = () => {
                   variant="secondary" 
                   onClick={() => {
                     const link = document.createElement('a');
-                    link.href = finalQuoteImage;
+                    link.href = finalQuoteImage!;
                     link.download = `carefree-stone-${userMode.toLowerCase()}-${Date.now()}.jpg`;
                     link.click();
                   }}
@@ -689,7 +767,7 @@ const App: React.FC = () => {
                          window.location.href = `sms:16028670867?body=${encodeURIComponent(body)}`;
                      } else {
                          if (navigator.share) {
-                             fetch(finalQuoteImage).then(res => res.blob()).then(blob => {
+                             fetch(finalQuoteImage!).then(res => res.blob()).then(blob => {
                                  const file = new File([blob], "estimate.jpg", { type: "image/jpeg" });
                                  navigator.share({
                                      title: 'Carefree Stone Estimate',
@@ -712,13 +790,30 @@ const App: React.FC = () => {
                     ? 'Official estimate generated. Save for records.'
                     : 'Tap "Text Business" to start your inquiry.'}
               </p>
-              <Button variant="ghost" onClick={reset} className="w-full text-xs">Start Over</Button>
+              <Button variant="ghost" onClick={() => dispatch({ type: 'RESET' })} className="w-full text-xs">Start Over</Button>
             </div>
           )}
         </div>
       </div>
     );
   };
+
+  const renderCurrentState = () => {
+      switch(appState) {
+          case AppState.IDLE:
+              return renderIdle();
+          case AppState.CAPTURE:
+              return renderCapture();
+          case AppState.PREVIEW:
+              return renderPreview();
+          case AppState.PROCESSING:
+              return renderProcessing();
+          case AppState.RESULT:
+              return renderResult();
+          default:
+              return renderIdle();
+      }
+  }
 
   return (
     <div className="h-full w-full bg-[#0B1120] text-slate-50 font-sans selection:bg-orange-500/30 selection:text-white bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:24px_24px] overflow-hidden fixed inset-0">
@@ -729,10 +824,7 @@ const App: React.FC = () => {
           100% { transform: translateX(300%); }
         }
       `}</style>
-      {appState === AppState.IDLE && renderIdle()}
-      {appState === AppState.PREVIEW && renderPreview()}
-      {appState === AppState.PROCESSING && renderProcessing()}
-      {appState === AppState.RESULT && renderResult()}
+      {renderCurrentState()}
     </div>
   );
 };

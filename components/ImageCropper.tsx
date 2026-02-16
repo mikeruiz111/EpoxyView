@@ -8,7 +8,7 @@ interface ImageCropperProps {
   onCancel: () => void;
 }
 
-export const ImageCropper: React.FC<ImageCropperProps> = ({ imageSrc, onConfirm, onCancel }) => {
+export const ImageCropper = React.memo<ImageCropperProps>(({ imageSrc, onConfirm, onCancel }) => {
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -169,4 +169,4 @@ export const ImageCropper: React.FC<ImageCropperProps> = ({ imageSrc, onConfirm,
         </div>
     </div>
   );
-};
+});
